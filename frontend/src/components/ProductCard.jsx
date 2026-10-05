@@ -1,12 +1,16 @@
 import { Link } from 'react-router-dom';
-import { Layers, CheckCircle, AlertCircle } from 'lucide-react';
+import { Layers, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 
 export default function ProductCard({ product }) {
   const variantCount = product.variants?.length || 0;
   const isOutOfStock = product.stock <= 0;
 
   return (
-    <div className="group bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 flex flex-col h-full">
+    <Link
+      to={`/products/${product.id}`}
+      className="group bg-white rounded-2xl border border-gray-200/80 overflow-hidden shadow-sm hover:shadow-md hover:border-indigo-300 transition-all duration-300 flex flex-col h-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+      aria-label={`View details for ${product.name}`}
+    >
       {/* Product Image Frame */}
       <div className="relative aspect-[4/5] w-full overflow-hidden bg-gray-100">
         <img
@@ -60,14 +64,20 @@ export default function ProductCard({ product }) {
             </span>
           </div>
 
-          <div className="flex items-center space-x-1.5 text-xs text-indigo-600 font-medium bg-indigo-50/80 px-2.5 py-1 rounded-lg">
+          <div className="flex items-center space-x-1.5 text-xs text-indigo-600 font-medium bg-indigo-50/80 px-2.5 py-1 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-200">
             <Layers className="w-3.5 h-3.5" />
             <span>
               {variantCount} {variantCount === 1 ? 'Variant' : 'Variants'}
             </span>
           </div>
         </div>
+
+        {/* View Details Action */}
+        <div className="mt-3 pt-2 text-xs font-medium text-indigo-600 group-hover:text-indigo-700 flex items-center justify-end space-x-1 transition-colors">
+          <span>View Details</span>
+          <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+        </div>
       </div>
-    </div>
+    </Link>
   );
 }
