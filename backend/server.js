@@ -5,6 +5,10 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+const categoryRoutes = require('./src/routes/categoryRoutes');
+const productRoutes = require('./src/routes/productRoutes');
+const errorHandler = require('./src/middleware/errorHandler');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -17,9 +21,24 @@ app.use(express.json());
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'UrbanThread API is running'
+    message: 'UrbanThread API is running',
   });
 });
+
+// API routes
+app.use('/api/categories', categoryRoutes);
+app.use('/api/products', productRoutes);
+
+// 404 handler for undefined routes
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Cannot ${req.method} ${req.originalUrl}`,
+  });
+});
+
+// Centralized error handler
+app.use(errorHandler);
 
 const server = app.listen(PORT, () => {
   console.log(`UrbanThread API server running on port ${PORT}`);
@@ -27,8 +46,12 @@ const server = app.listen(PORT, () => {
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use. On macOS, port 5000 is often reserved by AirPlay Receiver. Set PORT=5001 (or another free port) in your .env file.`);
+    console.error(
+      `Port ${PORT} is already in use. On macOS, port 5000 is often reserved by AirPlay Receiver. Set PORT=5001 in your .env file.`
+    );
   } else {
     console.error('Server error:', err);
   }
 });
+
+module.exports = app;
