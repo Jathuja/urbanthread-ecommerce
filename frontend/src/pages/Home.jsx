@@ -1,14 +1,22 @@
+import HeroSection from '../components/HeroSection';
+import CategorySection from '../components/CategorySection';
+import FeaturedProducts from '../components/FeaturedProducts';
+import PromoSection from '../components/PromoSection';
+
 export default function Home() {
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-      <div className="max-w-2xl">
-        <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl">
-          UrbanThread
-        </h1>
-        <p className="mt-4 text-lg text-gray-600">
-          Your destination for modern, high-quality clothing and fashion essentials. Discover versatile styles tailored for everyday comfort and contemporary trends.
-        </p>
-      </div>
+    <div className="flex flex-col min-h-screen">
+      {/* 1. Hero Section */}
+      <HeroSection />
+
+      {/* 2. Category Section */}
+      <CategorySection />
+
+      {/* 3. Featured Products Section */}
+      <FeaturedProducts />
+
+      {/* 4. Promotional Banner Section */}
+      <PromoSection />
     </div>
   );
 }
