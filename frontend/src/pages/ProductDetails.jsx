@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
+import { useCart } from '../context/CartContext';
 import {
   ArrowLeft,
   ShoppingBag,
@@ -14,7 +15,6 @@ import {
   ShieldCheck,
   Truck,
   RotateCcw,
-  Sparkles,
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
@@ -37,6 +37,7 @@ const COLOUR_SWATCHES = {
 
 export default function ProductDetails() {
   const { id } = useParams();
+  const { addToCart, getItemQuantity } = useCart();
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -47,7 +48,8 @@ export default function ProductDetails() {
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedColour, setSelectedColour] = useState('');
   const [quantity, setQuantity] = useState(1);
-  const [addedNotice, setAddedNotice] = useState(false);
+  const [cartFeedback, setCartFeedback] = useState(null);
+  const feedbackTimerRef = useRef(null);
 
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -122,6 +124,15 @@ export default function ProductDetails() {
   const variantStock = selectedVariant ? selectedVariant.stock : 0;
   const isOutOfStock = !selectedVariant || variantStock <= 0;
 
+  // Clear feedback timer on unmount
+  useEffect(() => {
+    return () => {
+      if (feedbackTimerRef.current) {
+        clearTimeout(feedbackTimerRef.current);
+      }
+    };
+  }, []);
+
   // Handle colour change: if current size is not valid for this colour, pick a valid size
   const handleColourChange = (colour) => {
     setSelectedColour(colour);
@@ -138,7 +149,7 @@ export default function ProductDetails() {
       }
     }
     setQuantity(1);
-    setAddedNotice(false);
+    setCartFeedback(null);
   };
 
   // Handle size change: if current colour is not valid for this size, pick a valid colour
@@ -157,7 +168,7 @@ export default function ProductDetails() {
       }
     }
     setQuantity(1);
-    setAddedNotice(false);
+    setCartFeedback(null);
   };
 
   // Quantity controls
@@ -171,13 +182,42 @@ export default function ProductDetails() {
     }
   };
 
-  // Add to Cart UI preparation handler
+  // Add to Cart handler with full stock validation and feedback
   const handleAddToCart = () => {
-    if (isOutOfStock) return;
-    setAddedNotice(true);
-    setTimeout(() => {
-      setAddedNotice(false);
-    }, 3000);
+    if (!product || !selectedVariant || isOutOfStock) return;
+
+    if (feedbackTimerRef.current) {
+      clearTimeout(feedbackTimerRef.current);
+    }
+
+    const result = addToCart({
+      productId: product.id,
+      productName: product.name,
+      image: product.image_url,
+      price: product.price,
+      category: product.category?.name || product.category || '',
+      variantId: selectedVariant.id,
+      size: selectedVariant.size,
+      colour: selectedVariant.colour,
+      quantity,
+      availableStock: selectedVariant.stock,
+    });
+
+    if (result.success) {
+      setCartFeedback({
+        type: 'success',
+        message: `Added to cart! (${selectedVariant.size} / ${selectedVariant.colour} × ${quantity})`,
+      });
+    } else {
+      setCartFeedback({
+        type: 'error',
+        message: result.message || 'Unable to add item to cart.',
+      });
+    }
+
+    feedbackTimerRef.current = setTimeout(() => {
+      setCartFeedback(null);
+    }, 3500);
   };
 
   // ===================== LOADING STATE =====================
@@ -598,17 +638,24 @@ export default function ProductDetails() {
                   </button>
                 </div>
 
-                <span className="text-xs text-gray-500">
-                  {isOutOfStock
-                    ? 'Variant currently unavailable'
-                    : quantity >= variantStock
-                    ? 'Maximum available quantity selected'
-                    : `Max available: ${variantStock}`}
-                </span>
+                <div className="flex flex-col text-xs text-gray-500">
+                  <span>
+                    {isOutOfStock
+                      ? 'Variant currently unavailable'
+                      : quantity >= variantStock
+                      ? 'Maximum available quantity selected'
+                      : `Max available: ${variantStock}`}
+                  </span>
+                  {selectedVariant && getItemQuantity(product.id, selectedVariant.id) > 0 && (
+                    <span className="text-indigo-600 font-medium mt-0.5">
+                      ({getItemQuantity(product.id, selectedVariant.id)} already in cart)
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* ADD TO CART BUTTON (UI / PREPARATION ELEMENT) */}
+            {/* ADD TO CART BUTTON */}
             <button
               type="button"
               onClick={handleAddToCart}
@@ -623,16 +670,22 @@ export default function ProductDetails() {
               <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
             </button>
 
-            {/* Temporary UI Notice when clicked */}
-            {addedNotice && (
+            {/* Non-blocking feedback notice when Add to Cart is clicked */}
+            {cartFeedback && (
               <div
                 role="status"
-                className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs sm:text-sm flex items-center space-x-2.5 animate-fadeIn"
+                className={`p-3.5 rounded-xl border text-xs sm:text-sm flex items-center space-x-2.5 transition-all duration-200 ${
+                  cartFeedback.type === 'success'
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-rose-50 border-rose-200 text-rose-800'
+                }`}
               >
-                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
-                <span>
-                  <strong>{product.name}</strong> ({selectedSize} / {selectedColour}) × {quantity} selected! Ready for cart integration.
-                </span>
+                {cartFeedback.type === 'success' ? (
+                  <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                )}
+                <span className="font-medium">{cartFeedback.message}</span>
               </div>
             )}
           </div>

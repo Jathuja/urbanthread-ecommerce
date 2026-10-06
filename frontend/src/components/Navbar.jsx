@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { Menu, X, ShoppingBag, ShoppingCart, User } from 'lucide-react';
+import { useCart } from '../context/CartContext';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const { cartCount } = useCart();
 
   const navLinkClass = ({ isActive }) =>
     `text-sm font-medium transition-colors hover:text-indigo-600 ${
@@ -39,18 +41,18 @@ export default function Navbar() {
 
           {/* Desktop Actions (Cart & Login Placeholders) */}
           <div className="hidden md:flex items-center space-x-4">
-            {/* Cart Icon Placeholder */}
-            <button
-              type="button"
+            {/* Cart Icon */}
+            <Link
+              to="/cart"
               className="relative p-2 text-gray-700 hover:text-indigo-600 hover:bg-gray-100 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              aria-label="View shopping cart"
-              title="Cart (Feature coming soon)"
+              aria-label={`View shopping cart with ${cartCount} items`}
+              title={`Cart (${cartCount} items)`}
             >
               <ShoppingCart className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                0
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {cartCount}
               </span>
-            </button>
+            </Link>
 
             {/* Login Placeholder */}
             <button
@@ -65,17 +67,17 @@ export default function Navbar() {
 
           {/* Mobile Right Controls: Cart + Hamburger Toggle */}
           <div className="flex items-center space-x-2 md:hidden">
-            <button
-              type="button"
+            <Link
+              to="/cart"
               className="relative p-2 text-gray-700 hover:text-indigo-600 focus:outline-none"
-              aria-label="View shopping cart"
-              title="Cart (Feature coming soon)"
+              aria-label={`View shopping cart with ${cartCount} items`}
+              title={`Cart (${cartCount} items)`}
             >
               <ShoppingCart className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                0
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {cartCount}
               </span>
-            </button>
+            </Link>
 
             <button
               type="button"
@@ -119,6 +121,22 @@ export default function Navbar() {
               }
             >
               Shop
+            </NavLink>
+            <NavLink
+              to="/cart"
+              onClick={() => setIsOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center justify-between px-3 py-2 rounded-md text-base font-medium transition-colors ${
+                  isActive
+                    ? 'bg-indigo-50 text-indigo-600 font-semibold'
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
+                }`
+              }
+            >
+              <span>Cart</span>
+              <span className="min-w-[18px] h-4 px-1 bg-indigo-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {cartCount}
+              </span>
             </NavLink>
           </div>
 
