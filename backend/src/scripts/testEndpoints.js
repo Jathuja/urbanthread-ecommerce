@@ -143,6 +143,312 @@ async function runTests() {
     }
   });
 
+  // 14. Create valid order (POST /api/orders -> 201)
+  let createdOrderId = null;
+  let testVariantId = null;
+  let testProductId = null;
+  let testProductPrice = null;
+  let initialStock = null;
+
+  await test('POST /api/orders (201 Created - valid order)', async () => {
+    // Dynamically retrieve product 1 and its first variant
+    const pRes = await fetch(`${BASE_URL}/products/1`);
+    const pData = await pRes.json();
+    testProductId = pData.data.id;
+    testProductPrice = parseFloat(pData.data.price);
+    testVariantId = pData.data.variants[0].id;
+    initialStock = pData.data.variants[0].stock;
+
+    const payload = {
+      customer: {
+        name: 'Kasun Perera',
+        email: 'kasun.perera@example.com',
+        phone: '+94 77 123 4567',
+        address: 'No 45, Galle Road, Bambalapitiya',
+        city: 'Colombo',
+        notes: 'Please leave at reception',
+      },
+      items: [
+        {
+          productId: testProductId,
+          variantId: testVariantId,
+          quantity: 2,
+        },
+      ],
+      paymentMethod: 'cash_on_delivery',
+    };
+
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+    if (res.status !== 201 || !data.success) {
+      throw new Error(`Failed to create order: ${JSON.stringify(data)}`);
+    }
+
+    if (!data.data.orderId || data.data.subtotal !== testProductPrice * 2 || data.data.total !== testProductPrice * 2) {
+      throw new Error(`Unexpected order calculation: ${JSON.stringify(data.data)}`);
+    }
+
+    if (data.data.paymentMethod !== 'cash_on_delivery' || data.data.paymentStatus !== 'pending' || data.data.orderStatus !== 'pending') {
+      throw new Error(`Unexpected status flags: ${JSON.stringify(data.data)}`);
+    }
+
+    createdOrderId = data.data.orderId;
+  });
+
+  // 15. Verify stock decrement after order
+  await test('Verify variant stock decremented by ordered quantity', async () => {
+    const pRes = await fetch(`${BASE_URL}/products/${testProductId}`);
+    const pData = await pRes.json();
+    const updatedVariant = pData.data.variants.find((v) => v.id === testVariantId);
+
+    if (!updatedVariant) {
+      throw new Error('Variant not found on product');
+    }
+
+    if (updatedVariant.stock !== initialStock - 2) {
+      throw new Error(`Expected stock ${initialStock - 2}, but got ${updatedVariant.stock}`);
+    }
+  });
+
+  // 16. Get order by ID (GET /api/orders/:id -> 200)
+  await test('GET /api/orders/:id (200 OK - retrieve order with items)', async () => {
+    const res = await fetch(`${BASE_URL}/orders/${createdOrderId}`);
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Failed to get order: ${JSON.stringify(data)}`);
+    }
+
+    const order = data.data;
+    if (order.id !== createdOrderId || order.customer.name !== 'Kasun Perera' || order.customer.email !== 'kasun.perera@example.com') {
+      throw new Error(`Customer details mismatch: ${JSON.stringify(order.customer)}`);
+    }
+
+    if (!Array.isArray(order.items) || order.items.length !== 1) {
+      throw new Error(`Expected 1 order item, got ${order.items?.length}`);
+    }
+
+    const item = order.items[0];
+    if (item.productId !== testProductId || item.variantId !== testVariantId || item.quantity !== 2) {
+      throw new Error(`Order item details mismatch: ${JSON.stringify(item)}`);
+    }
+    if (item.unitPrice !== testProductPrice || item.subtotal !== testProductPrice * 2) {
+      throw new Error(`Order item price mismatch: ${JSON.stringify(item)}`);
+    }
+  });
+
+  // 17. Validation: Empty items array (400)
+  await test('POST /api/orders with empty items (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          phone: '+94 71 234 5678',
+          address: '123 Flower Road',
+          city: 'Colombo',
+        },
+        items: [],
+        paymentMethod: 'whatsapp',
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 400 || data.success !== false) {
+      throw new Error(`Expected 400 Bad Request, got ${res.status}`);
+    }
+  });
+
+  // 18. Validation: Missing customer name & invalid email (400)
+  await test('POST /api/orders with invalid customer fields (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          name: '',
+          email: 'invalid-email',
+          phone: '123',
+          address: 'short',
+          city: '',
+        },
+        items: [{ productId: 1, variantId: 1, quantity: 1 }],
+        paymentMethod: 'payhere',
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 400 || data.success !== false || !Array.isArray(data.errors)) {
+      throw new Error(`Expected 400 with errors array, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 19. Validation: Invalid payment method (400)
+  await test('POST /api/orders with invalid paymentMethod (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          phone: '+94 71 234 5678',
+          address: '123 Flower Road',
+          city: 'Colombo',
+        },
+        items: [{ productId: 1, variantId: 1, quantity: 1 }],
+        paymentMethod: 'bitcoin',
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 400 || data.success !== false) {
+      throw new Error(`Expected 400 Bad Request, got ${res.status}`);
+    }
+  });
+
+  // 20. Validation: Non-existent product ID (404)
+  await test('POST /api/orders with non-existent productId (404 Not Found)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          phone: '+94 71 234 5678',
+          address: '123 Flower Road',
+          city: 'Colombo',
+        },
+        items: [{ productId: 9999, variantId: 1, quantity: 1 }],
+        paymentMethod: 'whatsapp',
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 404 || data.success !== false) {
+      throw new Error(`Expected 404 Not Found, got ${res.status}`);
+    }
+  });
+
+  // 21. Validation: Non-existent variant ID (404)
+  await test('POST /api/orders with non-existent variantId (404 Not Found)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          phone: '+94 71 234 5678',
+          address: '123 Flower Road',
+          city: 'Colombo',
+        },
+        items: [{ productId: 1, variantId: 99999, quantity: 1 }],
+        paymentMethod: 'whatsapp',
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 404 || data.success !== false) {
+      throw new Error(`Expected 404 Not Found, got ${res.status}`);
+    }
+  });
+
+  // 22. Validation: Variant belonging to another product (404)
+  await test('POST /api/orders with mismatched product/variant (404 Not Found)', async () => {
+    // Product 2 has variants that do not belong to Product 1
+    const p2Res = await fetch(`${BASE_URL}/products/2`);
+    const p2Data = await p2Res.json();
+    const p2VariantId = p2Data.data.variants[0].id;
+
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          phone: '+94 71 234 5678',
+          address: '123 Flower Road',
+          city: 'Colombo',
+        },
+        items: [{ productId: 1, variantId: p2VariantId, quantity: 1 }],
+        paymentMethod: 'whatsapp',
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 404 || data.success !== false) {
+      throw new Error(`Expected 404 Not Found, got ${res.status}`);
+    }
+  });
+
+  // 23. Validation: Quantity 0 or negative (400)
+  await test('POST /api/orders with quantity <= 0 (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          phone: '+94 71 234 5678',
+          address: '123 Flower Road',
+          city: 'Colombo',
+        },
+        items: [{ productId: 1, variantId: 1, quantity: 0 }],
+        paymentMethod: 'whatsapp',
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 400 || data.success !== false) {
+      throw new Error(`Expected 400 Bad Request, got ${res.status}`);
+    }
+  });
+
+  // 24. Validation: Insufficient stock (409 Conflict)
+  await test('POST /api/orders with quantity exceeding available stock (409 Conflict)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          name: 'Jane Doe',
+          email: 'jane@example.com',
+          phone: '+94 71 234 5678',
+          address: '123 Flower Road',
+          city: 'Colombo',
+        },
+        items: [{ productId: testProductId, variantId: testVariantId, quantity: 99999 }],
+        paymentMethod: 'whatsapp',
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 409 || data.success !== false) {
+      throw new Error(`Expected 409 Conflict, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 25. GET /api/orders/99999 -> 404
+  await test('GET /api/orders/99999 (404 Not Found)', async () => {
+    const res = await fetch(`${BASE_URL}/orders/99999`);
+    const data = await res.json();
+    if (res.status !== 404 || data.success !== false) {
+      throw new Error(`Expected 404 Not Found, got ${res.status}`);
+    }
+  });
+
+  // 26. GET /api/orders/abc -> 400
+  await test('GET /api/orders/abc (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/orders/abc`);
+    const data = await res.json();
+    if (res.status !== 400 || data.success !== false) {
+      throw new Error(`Expected 400 Bad Request, got ${res.status}`);
+    }
+  });
+
   console.log(`\n--- Test Summary: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) {
     process.exit(1);
@@ -150,3 +456,4 @@ async function runTests() {
 }
 
 runTests();
+
