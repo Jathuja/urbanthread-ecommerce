@@ -177,6 +177,24 @@ async function createOrder(orderData) {
 
     return {
       orderId,
+      customer: {
+        name: customer.name.trim(),
+        email: customer.email.trim().toLowerCase(),
+        phone: customer.phone.trim(),
+        address: customer.address.trim(),
+        city: customer.city.trim(),
+        notes: customer.notes ? customer.notes.trim() : null,
+      },
+      items: resolvedItems.map((item) => ({
+        productId: item.productId,
+        variantId: item.variantId,
+        productName: item.productName,
+        size: item.size,
+        colour: item.colour,
+        unitPrice: item.unitPrice,
+        quantity: item.quantity,
+        subtotal: item.subtotal,
+      })),
       subtotal,
       deliveryFee,
       total,
