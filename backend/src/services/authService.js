@@ -167,8 +167,84 @@ async function getUserById(id) {
   };
 }
 
+/**
+ * Update customer profile fields (name, phone, address, city).
+ *
+ * @param {number} userId
+ * @param {Object} data - { name, phone, address, city }
+ * @returns {Object} updated user
+ */
+async function updateProfile(userId, data) {
+  const { name, phone, address, city } = data;
+
+  const trimmedName = name ? name.trim() : undefined;
+  const trimmedPhone = phone !== undefined ? (phone ? phone.trim() : null) : undefined;
+  const trimmedAddress = address !== undefined ? (address ? address.trim() : null) : undefined;
+  const trimmedCity = city !== undefined ? (city ? city.trim() : null) : undefined;
+
+  if (trimmedName !== undefined && trimmedName.length < 2) {
+    const error = new Error('Full name must be at least 2 characters');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const fields = [];
+  const values = [];
+
+  if (trimmedName !== undefined) { fields.push('name = ?'); values.push(trimmedName); }
+  if (trimmedPhone !== undefined) { fields.push('phone = ?'); values.push(trimmedPhone); }
+  if (trimmedAddress !== undefined) { fields.push('address = ?'); values.push(trimmedAddress); }
+  if (trimmedCity !== undefined) { fields.push('city = ?'); values.push(trimmedCity); }
+
+  if (fields.length === 0) {
+    const error = new Error('No fields provided for update');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  values.push(userId);
+  await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, values);
+
+  return getUserById(userId);
+}
+
+/**
+ * Change customer password. Verifies current password before updating.
+ *
+ * @param {number} userId
+ * @param {string} currentPassword
+ * @param {string} newPassword
+ */
+async function changePassword(userId, currentPassword, newPassword) {
+  const [rows] = await db.query('SELECT password_hash FROM users WHERE id = ?', [userId]);
+
+  if (rows.length === 0) {
+    const error = new Error('User not found');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const isMatch = await bcrypt.compare(currentPassword, rows[0].password_hash);
+  if (!isMatch) {
+    const error = new Error('Current password is incorrect');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (!newPassword || newPassword.length < 6) {
+    const error = new Error('New password must be at least 6 characters');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 10);
+  await db.query('UPDATE users SET password_hash = ? WHERE id = ?', [newHash, userId]);
+}
+
 module.exports = {
   registerCustomer,
   loginCustomer,
   getUserById,
+  updateProfile,
+  changePassword,
 };

@@ -13,4 +13,12 @@ router.post('/login', validateLogin, authController.login);
 // GET /api/auth/me (Protected)
 router.get('/me', authenticate, authController.getMe);
 
+// PUT /api/auth/profile (Protected) — update name, phone, address, city
+router.put('/profile', authenticate, authController.updateProfile);
+
+// PUT /api/auth/password (Protected) — change password
+router.put('/password', authenticate, authController.changePassword);
+router.put('/change-password', authenticate, authController.changePassword);
+
 module.exports = router;
+

@@ -224,7 +224,7 @@ export default function OrderDetail() {
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors inline-flex items-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Order History</span>
+            <span>Back to My Orders</span>
           </Link>
         </div>
       </div>
@@ -261,7 +261,7 @@ export default function OrderDetail() {
           className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-indigo-600 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to All Orders</span>
+          <span>Back to My Orders</span>
         </Link>
 
         <div className="flex items-center gap-2">

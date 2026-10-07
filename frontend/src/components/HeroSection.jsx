@@ -37,12 +37,12 @@ export default function HeroSection() {
                 <ArrowRight className="w-4 h-4" />
               </Link>
 
-              <Link
-                to="/products"
+              <a
+                href="#new-arrivals"
                 className="w-full sm:w-auto inline-flex items-center justify-center px-7 py-3.5 rounded-xl text-gray-800 bg-white hover:bg-gray-50 border border-gray-300 hover:border-gray-400 font-semibold text-base shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
               >
                 Explore New Arrivals
-              </Link>
+              </a>
             </div>
 
             {/* Value Props Strip */}

@@ -17,15 +17,15 @@ export default function FeaturedProducts() {
     async function loadFeatured() {
       try {
         setLoading(true);
-        const res = await axios.get(`${API_BASE_URL}/api/products`);
+        const res = await axios.get(`${API_BASE_URL}/api/products?sort=newest&limit=8`);
         if (isMounted && res.data && res.data.success) {
-          // Take only the first 4 real products
-          setProducts(res.data.data.slice(0, 4));
+          // Take real newest products from database
+          setProducts(res.data.data.slice(0, 8));
           setError(null);
         }
       } catch (err) {
         if (isMounted) {
-          setError(err.response?.data?.message || err.message || 'Failed to load featured products');
+          setError(err.response?.data?.message || err.message || 'Failed to load new arrivals');
         }
       } finally {
         if (isMounted) {
@@ -42,20 +42,20 @@ export default function FeaturedProducts() {
   }, []);
 
   return (
-    <section className="py-16 sm:py-20 bg-white border-t border-gray-100">
+    <section id="new-arrivals" className="py-16 sm:py-20 bg-white border-t border-gray-100 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header with Title and View All Link */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-10 pb-4 border-b border-gray-100">
           <div>
             <div className="inline-flex items-center space-x-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 mb-2">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Handpicked Highlights</span>
+              <span>Fresh Drops & New Arrivals</span>
             </div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 tracking-tight">
-              Featured Collection
+              New Arrivals Collection
             </h2>
             <p className="mt-2 text-sm text-gray-600 max-w-xl">
-              Signature wardrobe essentials chosen for their craftsmanship, versatility, and everyday comfort.
+              Fresh additions straight from our design studio. Quality craftsmanship, sustainable cottons, and modern silhouettes.
             </p>
           </div>
 
