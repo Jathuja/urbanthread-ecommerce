@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import {
   Package,
   Calendar,
   CreditCard,
-  Truck,
   ArrowLeft,
   RefreshCw,
   AlertCircle,
@@ -20,7 +19,6 @@ import {
   DollarSign,
   Copy,
   Check,
-  FileText,
   ShieldCheck,
   ExternalLink,
 } from 'lucide-react';
@@ -154,7 +152,6 @@ function getPaymentMethodDetails(method) {
 
 export default function OrderDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
