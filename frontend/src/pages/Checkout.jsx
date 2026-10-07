@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
 import { generateWhatsAppOrderUrl } from '../utils/whatsapp';
@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Copy,
   Check,
+  RefreshCw,
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
@@ -78,6 +79,11 @@ const PAYMENT_METHODS = [
 
 export default function Checkout() {
   const { cart, cartCount, cartTotal, clearCart, formatLKR } = useCart();
+  const [searchParams] = useSearchParams();
+
+  // Read URL query params if returning from PayHere checkout redirect
+  const payhereQueryStatus = searchParams.get('payhere_status');
+  const payhereQueryOrderId = searchParams.get('order_id');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -99,6 +105,56 @@ export default function Checkout() {
   const [orderSuccess, setOrderSuccess] = useState(null);
   const [showWhatsAppPreview, setShowWhatsAppPreview] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState(false);
+
+  // PayHere return callback state
+  const [payhereReturnNotice, setPayhereReturnNotice] = useState(() => {
+    if (payhereQueryStatus && payhereQueryOrderId) {
+      return { status: payhereQueryStatus, orderId: payhereQueryOrderId };
+    }
+    return null;
+  });
+
+  // Handle return from PayHere sandbox (success or cancelled)
+  useEffect(() => {
+    if (payhereQueryOrderId && !orderSuccess) {
+      axios
+        .get(`${API_BASE_URL}/api/orders/${payhereQueryOrderId}`)
+        .then(async (res) => {
+          if (res.data?.success && res.data.data) {
+            const fetched = res.data.data;
+
+            // Also load PayHere checkout params for the existing order in case of retry
+            let payhereData = null;
+            try {
+              const pRes = await axios.get(
+                `${API_BASE_URL}/api/orders/${payhereQueryOrderId}/payhere-params`
+              );
+              if (pRes.data?.success) {
+                payhereData = pRes.data.data;
+              }
+            } catch {
+              // PayHere params fetch error ignored
+            }
+
+            setOrderSuccess({
+              orderId: fetched.id,
+              subtotal: fetched.subtotal,
+              deliveryFee: fetched.deliveryFee || 0,
+              total: fetched.total,
+              paymentMethod: fetched.paymentMethod,
+              paymentStatus: fetched.paymentStatus,
+              orderStatus: fetched.orderStatus,
+              customer: fetched.customer,
+              items: fetched.items,
+              payhere: payhereData,
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not retrieve PayHere returned order:', err.message);
+        });
+    }
+  }, [payhereQueryOrderId, orderSuccess]);
 
   // Form input change handler
   const handleInputChange = (e) => {
@@ -227,6 +283,7 @@ export default function Checkout() {
           paymentStatus: orderData.paymentStatus,
           orderStatus: orderData.orderStatus,
           customer: orderData.customer || { ...formData },
+          payhere: orderData.payhere || null,
           // Authoritative items from backend response
           items:
             orderData.items && orderData.items.length > 0
@@ -306,6 +363,8 @@ export default function Checkout() {
   if (orderSuccess) {
     const selectedMethodObj = PAYMENT_METHODS.find((p) => p.id === orderSuccess.paymentMethod);
     const isWhatsApp = orderSuccess.paymentMethod === 'whatsapp';
+    const isPayHere = orderSuccess.paymentMethod === 'payhere';
+    const isCOD = orderSuccess.paymentMethod === 'cash_on_delivery';
 
     // Generate WhatsApp click-to-chat payload if WhatsApp was selected
     const {
@@ -337,6 +396,35 @@ export default function Checkout() {
             </p>
           </div>
 
+          {/* PayHere Return Callback Notice (if returning from redirect) */}
+          {payhereReturnNotice && (
+            <div
+              className={`mt-6 p-4 rounded-2xl border flex items-start space-x-3 text-xs sm:text-sm ${
+                payhereReturnNotice.status === 'success'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-amber-50 border-amber-200 text-amber-900'
+              }`}
+            >
+              {payhereReturnNotice.status === 'success' ? (
+                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              )}
+              <div className="space-y-1">
+                <p className="font-bold">
+                  {payhereReturnNotice.status === 'success'
+                    ? 'PayHere Gateway Checkout Completed'
+                    : 'PayHere Checkout Cancelled'}
+                </p>
+                <p className="leading-relaxed">
+                  {payhereReturnNotice.status === 'success'
+                    ? `Payment process completed via PayHere. Your payment status will update once our server receives the confirmed notification.`
+                    : `Your payment was cancelled at the PayHere checkout. Your order (#${orderSuccess.orderId}) remains saved as '${orderSuccess.paymentStatus}'. You can retry payment below.`}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Key Order Highlight Card */}
           <div className="mt-8 bg-gray-50/80 border border-gray-200/80 rounded-2xl p-5 sm:p-6 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
             <div>
@@ -358,14 +446,99 @@ export default function Checkout() {
               </span>
             </div>
             <div>
-              <span className="text-xs text-gray-500 font-medium block">Order Status</span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800 mt-1 capitalize">
-                {orderSuccess.orderStatus}
+              <span className="text-xs text-gray-500 font-medium block">Payment Status</span>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold mt-1 capitalize ${
+                  orderSuccess.paymentStatus === 'paid'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : orderSuccess.paymentStatus === 'failed'
+                    ? 'bg-red-100 text-red-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {orderSuccess.paymentStatus}
               </span>
             </div>
           </div>
 
-          {/* WHATSAPP ACTION SECTION (ONLY IF PAYMENT METHOD IS WHATSAPP) */}
+          {/* ======================================================== */}
+          {/* SECTION 1: PAYHERE SANDBOX CHECKOUT FLOW (PAYHERE ORDERS) */}
+          {/* ======================================================== */}
+          {isPayHere && (
+            <div className="mt-8 bg-indigo-50/60 border border-indigo-200/90 rounded-2xl p-5 sm:p-6 space-y-4">
+              <div className="flex items-start space-x-3.5">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <CreditCard className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-gray-900">
+                    Pay with PayHere Sandbox
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1 leading-relaxed">
+                    Your order details and stock reservation have been confirmed. Proceed to the PayHere Sandbox payment gateway to complete your payment.
+                  </p>
+                </div>
+              </div>
+
+              {/* If PayHere is properly configured and parameters are available */}
+              {orderSuccess.payhere && orderSuccess.payhere.isConfigured && orderSuccess.payhere.params ? (
+                <div className="pt-2 space-y-3">
+                  <form
+                    action={orderSuccess.payhere.checkoutUrl}
+                    method="POST"
+                    className="inline-block w-full sm:w-auto"
+                  >
+                    {/* Hidden PayHere Checkout Form Parameters */}
+                    {Object.entries(orderSuccess.payhere.params).map(([paramKey, paramValue]) => (
+                      <input
+                        key={paramKey}
+                        type="hidden"
+                        name={paramKey}
+                        value={paramValue}
+                      />
+                    ))}
+
+                    <button
+                      type="submit"
+                      className="w-full sm:w-auto inline-flex items-center justify-center space-x-2.5 px-7 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm sm:text-base shadow-sm hover:shadow-indigo-100 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 active:scale-[0.99] cursor-pointer"
+                    >
+                      <CreditCard className="w-5 h-5" />
+                      <span>Proceed to PayHere Sandbox • {formatLKR(orderSuccess.total)}</span>
+                      <ExternalLink className="w-4 h-4 ml-1 opacity-80" />
+                    </button>
+                  </form>
+
+                  <p className="text-[11px] text-gray-500 flex items-center space-x-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                    <span>
+                      PayHere Sandbox accepts Visa, MasterCard, AMEX, eZ Cash, mCash, and Internet Banking.
+                    </span>
+                  </p>
+                </div>
+              ) : (
+                /* Graceful Notice if PayHere credentials are not configured on server */
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm space-y-2">
+                  <div className="flex items-center space-x-2 font-bold">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>PayHere Sandbox Configuration Notice</span>
+                  </div>
+                  <p className="leading-relaxed">
+                    {orderSuccess.payhere?.message ||
+                      'PayHere merchant credentials are not currently configured on the server.'}
+                  </p>
+                  <p className="text-[11px] text-amber-700">
+                    Your order (#<strong>{orderSuccess.orderId}</strong>) has been reserved. You can configure{' '}
+                    <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">PAYHERE_MERCHANT_ID</code> and{' '}
+                    <code className="bg-amber-100 px-1 py-0.5 rounded font-mono">PAYHERE_MERCHANT_SECRET</code> in the backend environment to enable active checkout redirects.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* SECTION 2: WHATSAPP ORDER FLOW (ONLY FOR WHATSAPP)        */}
+          {/* ======================================================== */}
           {isWhatsApp && (
             <div className="mt-8 bg-emerald-50/60 border border-emerald-200/90 rounded-2xl p-5 sm:p-6 space-y-4">
               <div className="flex items-start space-x-3.5">
@@ -470,23 +643,16 @@ export default function Checkout() {
             </div>
           )}
 
-          {/* NON-WHATSAPP PAYMENT NOTIFICATIONS (PAYHERE OR CASH ON DELIVERY) */}
-          {!isWhatsApp && (
-            <div className="mt-6 bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4 sm:p-5 flex items-start space-x-3.5">
-              <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-              <div className="text-xs sm:text-sm text-indigo-900 space-y-1">
-                <p className="font-semibold">Next Step: Payment & Fulfillment</p>
-                <p className="text-indigo-700 leading-relaxed">
-                  {orderSuccess.paymentMethod === 'payhere' && (
-                    <>
-                      PayHere payment gateway integration is currently in testing. An invoice link will be sent to your email to complete online payment.
-                    </>
-                  )}
-                  {orderSuccess.paymentMethod === 'cash_on_delivery' && (
-                    <>
-                      Your package will be dispatched with our courier service. Please have the exact cash amount ready upon delivery at your doorstep.
-                    </>
-                  )}
+          {/* ======================================================== */}
+          {/* SECTION 3: CASH ON DELIVERY FLOW (ONLY FOR COD)          */}
+          {/* ======================================================== */}
+          {isCOD && (
+            <div className="mt-6 bg-amber-50/70 border border-amber-200 rounded-2xl p-4 sm:p-5 flex items-start space-x-3.5">
+              <Truck className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="text-xs sm:text-sm text-amber-900 space-y-1">
+                <p className="font-semibold">Next Step: Cash on Delivery Dispatch</p>
+                <p className="text-amber-800 leading-relaxed">
+                  Your package will be dispatched with our courier service. Please have the exact cash amount ({formatLKR(orderSuccess.total)}) ready upon delivery at your doorstep.
                 </p>
               </div>
             </div>
@@ -563,17 +729,24 @@ export default function Checkout() {
           {/* Navigation Action Buttons */}
           <div className="mt-10 pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
+              to={`/orders/${orderSuccess.orderId}`}
+              className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            >
+              <Package className="w-4 h-4" />
+              <span>View Order #{orderSuccess.orderId}</span>
+            </Link>
+            <Link
+              to="/orders"
+              className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 font-semibold text-sm transition-colors"
+            >
+              <span>Order History</span>
+            </Link>
+            <Link
               to="/products"
-              className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-8 py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm transition-all shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+              className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-2xl border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-sm transition-colors"
             >
               <ShoppingBag className="w-4 h-4" />
               <span>Continue Shopping</span>
-            </Link>
-            <Link
-              to="/"
-              className="w-full sm:w-auto inline-flex items-center justify-center space-x-2 px-6 py-3.5 rounded-2xl border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold text-sm transition-colors"
-            >
-              <span>Back to Home</span>
             </Link>
           </div>
         </div>
@@ -876,7 +1049,7 @@ export default function Checkout() {
                         errors.address
                           ? 'border-red-300 bg-red-50/30 focus:border-red-500 focus:ring-red-200 text-red-900'
                           : 'border-gray-200 bg-white hover:border-gray-300 focus:border-indigo-500 focus:ring-indigo-100 text-gray-900'
-                      }`}
+                        }`}
                     />
                   </div>
                   {errors.address && (
@@ -963,8 +1136,7 @@ export default function Checkout() {
               <div className="mt-5 bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 flex items-start space-x-3 text-amber-900 text-xs sm:text-sm">
                 <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p>
-                  <span className="font-semibold">Notice:</span> Payment processing will happen in the next step.
-                  Placing an order now reserves your stock without instant debit.
+                  <span className="font-semibold">Notice:</span> Selecting PayHere Sandbox enables secure card/wallet payment. Placing an order reserves your stock before redirecting to the payment gateway.
                 </p>
               </div>
 

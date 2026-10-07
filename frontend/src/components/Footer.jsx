@@ -51,6 +51,14 @@ export default function Footer() {
                   Accessories
                 </Link>
               </li>
+              <li>
+                <Link
+                  to="/orders"
+                  className="text-sm text-gray-600 hover:text-indigo-600 transition-colors"
+                >
+                  Order History
+                </Link>
+              </li>
             </ul>
           </div>
 

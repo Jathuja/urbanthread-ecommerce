@@ -339,13 +339,23 @@ async function setupDatabase() {
       console.log(` Inserted product: ${p.name} (id: ${productId})`);
     }
 
-    // Insert variants (remove old variants for clean idempotency)
-    await conn.query('DELETE FROM product_variants WHERE product_id = ?', [productId]);
+    // Upsert variants (update stock if existing, or insert new, preserving FK integrity)
     for (const v of p.variants) {
-      await conn.query(
-        'INSERT INTO product_variants (product_id, size, colour, stock) VALUES (?, ?, ?, ?)',
-        [productId, v.size, v.colour, v.stock]
+      const [existingVar] = await conn.query(
+        'SELECT id FROM product_variants WHERE product_id = ? AND size = ? AND colour = ?',
+        [productId, v.size, v.colour]
       );
+      if (existingVar.length > 0) {
+        await conn.query(
+          'UPDATE product_variants SET stock = ? WHERE id = ?',
+          [v.stock, existingVar[0].id]
+        );
+      } else {
+        await conn.query(
+          'INSERT INTO product_variants (product_id, size, colour, stock) VALUES (?, ?, ?, ?)',
+          [productId, v.size, v.colour, v.stock]
+        );
+      }
     }
     console.log(`   Seeded ${p.variants.length} variants for ${p.name}`);
   }

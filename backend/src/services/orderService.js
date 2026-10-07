@@ -295,8 +295,95 @@ async function getOrderById(id) {
   };
 }
 
+async function getAllOrders() {
+  const [orderRows] = await db.query(
+    `SELECT
+       id,
+       customer_name,
+       customer_email,
+       customer_phone,
+       shipping_address,
+       shipping_city,
+       notes,
+       subtotal,
+       delivery_fee,
+       total,
+       payment_method,
+       payment_status,
+       order_status,
+       created_at,
+       updated_at
+     FROM orders
+     ORDER BY created_at DESC, id DESC`
+  );
+
+  if (orderRows.length === 0) {
+    return [];
+  }
+
+  const orderIds = orderRows.map((o) => o.id);
+  const [itemRows] = await db.query(
+    `SELECT
+       id,
+       order_id,
+       product_id,
+       variant_id,
+       product_name,
+       size,
+       colour,
+       unit_price,
+       quantity,
+       subtotal
+     FROM order_items
+     WHERE order_id IN (?)
+     ORDER BY id ASC`,
+    [orderIds]
+  );
+
+  // Group items by order_id
+  const itemsByOrderId = {};
+  for (const item of itemRows) {
+    if (!itemsByOrderId[item.order_id]) {
+      itemsByOrderId[item.order_id] = [];
+    }
+    itemsByOrderId[item.order_id].push({
+      id:          item.id,
+      productId:   item.product_id,
+      variantId:   item.variant_id,
+      productName: item.product_name,
+      size:        item.size,
+      colour:      item.colour,
+      unitPrice:   parseFloat(item.unit_price),
+      quantity:    item.quantity,
+      subtotal:    parseFloat(item.subtotal),
+    });
+  }
+
+  return orderRows.map((order) => ({
+    id:             order.id,
+    customer: {
+      name:    order.customer_name,
+      email:   order.customer_email,
+      phone:   order.customer_phone,
+      address: order.shipping_address,
+      city:    order.shipping_city,
+      notes:   order.notes,
+    },
+    subtotal:      parseFloat(order.subtotal),
+    deliveryFee:   parseFloat(order.delivery_fee),
+    total:         parseFloat(order.total),
+    paymentMethod: order.payment_method,
+    paymentStatus: order.payment_status,
+    orderStatus:   order.order_status,
+    createdAt:     order.created_at,
+    updatedAt:     order.updated_at,
+    items:         itemsByOrderId[order.id] || [],
+  }));
+}
+
 module.exports = {
   createOrder,
   getOrderById,
+  getAllOrders,
   SUPPORTED_PAYMENT_METHODS,
 };

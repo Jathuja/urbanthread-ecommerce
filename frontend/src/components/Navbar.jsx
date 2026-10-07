@@ -37,6 +37,9 @@ export default function Navbar() {
             <NavLink to="/products" className={navLinkClass}>
               Shop
             </NavLink>
+            <NavLink to="/orders" className={navLinkClass}>
+              Orders
+            </NavLink>
           </div>
 
           {/* Desktop Actions (Cart & Login Placeholders) */}
@@ -121,6 +124,19 @@ export default function Navbar() {
               }
             >
               Shop
+            </NavLink>
+            <NavLink
+              to="/orders"
+              onClick={() => setIsOpen(false)}
+              className={({ isActive }) =>
+                `block px-3 py-2 rounded-md text-base font-medium transition-colors ${
+                  isActive
+                    ? 'bg-indigo-50 text-indigo-600 font-semibold'
+                    : 'text-gray-700 hover:bg-gray-50 hover:text-indigo-600'
+                }`
+              }
+            >
+              Orders
             </NavLink>
             <NavLink
               to="/cart"

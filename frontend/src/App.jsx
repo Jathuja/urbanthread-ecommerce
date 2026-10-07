@@ -6,6 +6,8 @@ import Products from './pages/Products';
 import ProductDetails from './pages/ProductDetails';
 import Cart from './pages/Cart';
 import Checkout from './pages/Checkout';
+import OrderHistory from './pages/OrderHistory';
+import OrderDetail from './pages/OrderDetail';
 import { CartProvider } from './context/CartContext';
 
 export default function App() {
@@ -20,6 +22,8 @@ export default function App() {
             <Route path="/products/:id" element={<ProductDetails />} />
             <Route path="/cart" element={<Cart />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/orders" element={<OrderHistory />} />
+            <Route path="/orders/:id" element={<OrderDetail />} />
           </Routes>
         </main>
         <Footer />

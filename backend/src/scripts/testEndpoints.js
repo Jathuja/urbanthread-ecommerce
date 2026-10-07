@@ -449,6 +449,357 @@ async function runTests() {
     }
   });
 
+  // =========================================================================
+  // PayHere Tests (27–35)
+  // =========================================================================
+  // These tests rely on the sandbox credentials configured in .env:
+  //   PAYHERE_MERCHANT_ID=1220000
+  //   PAYHERE_MERCHANT_SECRET=sandbox_merchant_secret_urbanthread
+  //
+  // Two signature formulas are used by PayHere:
+  //
+  // 1. Checkout hash (payment initiation):
+  //    hash = UPPER(md5(merchant_id + order_id + amount + currency + UPPER(md5(secret))))
+  //
+  // 2. IPN notification signature (payhereService.verifyNotificationSignature):
+  //    md5sig = UPPER(md5(merchant_id + order_id + amount + currency + status_code + UPPER(md5(secret))))
+  //
+  // Note: status_code is included in the IPN formula but NOT in the checkout hash.
+  // =========================================================================
+
+  const crypto = await import('crypto');
+  const MERCHANT_ID = '1220000';
+  const MERCHANT_SECRET = 'sandbox_merchant_secret_urbanthread';
+
+  /**
+   * Helper – compute the IPN notification md5sig exactly as payhereService.verifyNotificationSignature does.
+   * Formula: UPPER(md5(merchant_id + order_id + payhere_amount + payhere_currency + status_code + UPPER(md5(merchant_secret))))
+   */
+  function computeIpnSig(merchantId, orderId, amount, currency, statusCode, secret) {
+    const upper = (s) => crypto.createHash('md5').update(String(s)).digest('hex').toUpperCase();
+    const hashedSecret = upper(secret);
+    const raw = `${merchantId}${orderId}${amount}${currency}${statusCode}${hashedSecret}`;
+    return upper(raw);
+  }
+
+  // 27. GET /api/orders/:id/payhere-params — valid order should return params + hash
+  await test('GET /api/orders/:id/payhere-params (200 OK - returns PayHere params)', async () => {
+    if (!createdOrderId) throw new Error('Prerequisite: createdOrderId not set (test 14 failed)');
+    const res = await fetch(`${BASE_URL}/orders/${createdOrderId}/payhere-params`);
+    const data = await res.json();
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+    const p = data.data;
+    if (!p.isConfigured) {
+      throw new Error(`PayHere reported not configured: ${JSON.stringify(p)}`);
+    }
+    if (!p.params || !p.params.merchant_id || !p.params.hash || !p.params.amount) {
+      throw new Error(`Missing required PayHere params fields: ${JSON.stringify(p.params)}`);
+    }
+    if (p.params.merchant_id !== MERCHANT_ID) {
+      throw new Error(`Merchant ID mismatch: expected ${MERCHANT_ID}, got ${p.params.merchant_id}`);
+    }
+    if (!p.checkoutUrl || !p.checkoutUrl.includes('payhere.lk')) {
+      throw new Error(`Invalid checkoutUrl: ${p.checkoutUrl}`);
+    }
+  });
+
+  // 28. GET /api/orders/99999/payhere-params — non-existent order (404)
+  await test('GET /api/orders/99999/payhere-params (404 Not Found)', async () => {
+    const res = await fetch(`${BASE_URL}/orders/99999/payhere-params`);
+    const data = await res.json();
+    if (res.status !== 404 || data.success !== false) {
+      throw new Error(`Expected 404 Not Found, got ${res.status}`);
+    }
+  });
+
+  // 29. GET /api/orders/abc/payhere-params — invalid ID format (400)
+  await test('GET /api/orders/abc/payhere-params (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/orders/abc/payhere-params`);
+    const data = await res.json();
+    if (res.status !== 400 || data.success !== false) {
+      throw new Error(`Expected 400 Bad Request, got ${res.status}`);
+    }
+  });
+
+  // 30. POST /api/orders/payhere-notify — missing required fields (400)
+  await test('POST /api/orders/payhere-notify with missing fields (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/orders/payhere-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ merchant_id: MERCHANT_ID }),
+    });
+    const data = await res.json();
+    if (res.status !== 400 || data.success !== false) {
+      throw new Error(`Expected 400 Bad Request, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 31. POST /api/orders/payhere-notify — invalid signature (400)
+  await test('POST /api/orders/payhere-notify with invalid md5sig (400 Bad Request)', async () => {
+    if (!createdOrderId) throw new Error('Prerequisite: createdOrderId not set (test 14 failed)');
+
+    const orderRes = await fetch(`${BASE_URL}/orders/${createdOrderId}`);
+    const orderData = await orderRes.json();
+    const amount = parseFloat(orderData.data.total).toFixed(2);
+
+    const res = await fetch(`${BASE_URL}/orders/payhere-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        merchant_id: MERCHANT_ID,
+        order_id: String(createdOrderId),
+        payment_id: 'PAY_INVALID_001',
+        payhere_amount: amount,
+        payhere_currency: 'LKR',
+        status_code: '2',
+        md5sig: 'INVALIDSIGNATURE000000000000000',
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 400 || data.success !== false) {
+      throw new Error(`Expected 400 Bad Request for bad signature, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 32. POST /api/orders/payhere-notify — valid success notification (status_code=2)
+  await test('POST /api/orders/payhere-notify valid success (200 OK - payment_status=paid)', async () => {
+    if (!createdOrderId) throw new Error('Prerequisite: createdOrderId not set (test 14 failed)');
+
+    const orderRes = await fetch(`${BASE_URL}/orders/${createdOrderId}`);
+    const orderData = await orderRes.json();
+    const amount = parseFloat(orderData.data.total).toFixed(2);
+    const currency = 'LKR';
+    const statusCode = '2';
+
+    const md5sig = computeIpnSig(MERCHANT_ID, String(createdOrderId), amount, currency, statusCode, MERCHANT_SECRET);
+
+    const res = await fetch(`${BASE_URL}/orders/payhere-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        merchant_id: MERCHANT_ID,
+        order_id: String(createdOrderId),
+        payment_id: 'PAY_SANDBOX_001',
+        payhere_amount: amount,
+        payhere_currency: currency,
+        status_code: statusCode,
+        md5sig,
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for valid success notification, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+    if (data.data.paymentStatus !== 'paid' || data.data.orderStatus !== 'processing') {
+      throw new Error(`Expected paymentStatus=paid, orderStatus=processing. Got: ${JSON.stringify(data.data)}`);
+    }
+  });
+
+  // 33. POST /api/orders/payhere-notify — duplicate paid notification (idempotency, 200 OK)
+  await test('POST /api/orders/payhere-notify duplicate paid notification (200 OK - idempotent)', async () => {
+    if (!createdOrderId) throw new Error('Prerequisite: createdOrderId not set (test 14 failed)');
+
+    const orderRes = await fetch(`${BASE_URL}/orders/${createdOrderId}`);
+    const orderData = await orderRes.json();
+    const amount = parseFloat(orderData.data.total).toFixed(2);
+    const currency = 'LKR';
+    const statusCode = '2';
+
+    const md5sig = computeIpnSig(MERCHANT_ID, String(createdOrderId), amount, currency, statusCode, MERCHANT_SECRET);
+
+    const res = await fetch(`${BASE_URL}/orders/payhere-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        merchant_id: MERCHANT_ID,
+        order_id: String(createdOrderId),
+        payment_id: 'PAY_SANDBOX_001',
+        payhere_amount: amount,
+        payhere_currency: currency,
+        status_code: statusCode,
+        md5sig,
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for duplicate notification, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+    if (!data.message.toLowerCase().includes('duplicate') && !data.message.toLowerCase().includes('already')) {
+      throw new Error(`Expected idempotency message, got: ${data.message}`);
+    }
+  });
+
+  // 34. POST /api/orders/payhere-notify — failed payment (status_code=-1) on a new order
+  let failOrderId = null;
+  await test('POST /api/orders/payhere-notify failed payment (200 OK - payment_status=failed)', async () => {
+    // Create a fresh order to set to failed (so we don't conflict with the paid order above)
+    const pRes = await fetch(`${BASE_URL}/products/1`);
+    const pData = await pRes.json();
+    const variantId = pData.data.variants[0].id;
+
+    const createRes = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customer: {
+          name: 'Nimal Silva',
+          email: 'nimal@example.com',
+          phone: '+94 71 999 0000',
+          address: '10 Kandy Road',
+          city: 'Kandy',
+        },
+        items: [{ productId: 1, variantId, quantity: 1 }],
+        paymentMethod: 'payhere',
+      }),
+    });
+    const createData = await createRes.json();
+    if (!createData.success) throw new Error(`Failed to create test order: ${JSON.stringify(createData)}`);
+    failOrderId = createData.data.orderId;
+
+    const amount = parseFloat(createData.data.total).toFixed(2);
+    const currency = 'LKR';
+    const statusCode = '-1';
+
+    const md5sig = computeIpnSig(MERCHANT_ID, String(failOrderId), amount, currency, statusCode, MERCHANT_SECRET);
+
+    const res = await fetch(`${BASE_URL}/orders/payhere-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        merchant_id: MERCHANT_ID,
+        order_id: String(failOrderId),
+        payment_id: 'PAY_SANDBOX_FAIL_001',
+        payhere_amount: amount,
+        payhere_currency: currency,
+        status_code: statusCode,
+        md5sig,
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for failed payment, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+    if (data.data.paymentStatus !== 'failed' || data.data.orderStatus !== 'cancelled') {
+      throw new Error(`Expected paymentStatus=failed, orderStatus=cancelled. Got: ${JSON.stringify(data.data)}`);
+    }
+  });
+
+  // 35. POST /api/orders/payhere-notify — amount mismatch (400)
+  await test('POST /api/orders/payhere-notify with amount mismatch (400 Bad Request)', async () => {
+    if (!createdOrderId) throw new Error('Prerequisite: createdOrderId not set (test 14 failed)');
+
+    // Use a deliberately wrong amount (1.00) but generate hash with wrong amount too so sig passes
+    const wrongAmount = '1.00';
+    const currency = 'LKR';
+    const statusCode = '2';
+
+    const md5sig = computeIpnSig(MERCHANT_ID, String(createdOrderId), wrongAmount, currency, statusCode, MERCHANT_SECRET);
+
+    const res = await fetch(`${BASE_URL}/orders/payhere-notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        merchant_id: MERCHANT_ID,
+        order_id: String(createdOrderId),
+        payment_id: 'PAY_SANDBOX_MISMATCH',
+        payhere_amount: wrongAmount,
+        payhere_currency: currency,
+        status_code: statusCode,
+        md5sig,
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 400 || data.success !== false) {
+      throw new Error(`Expected 400 for amount mismatch, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+    if (!data.message.toLowerCase().includes('amount') && !data.message.toLowerCase().includes('mismatch')) {
+      throw new Error(`Expected amount mismatch error message, got: ${data.message}`);
+    }
+  });
+
+  // 36. GET /api/orders (200 OK - retrieve all orders)
+  await test('GET /api/orders (200 OK - retrieve all orders list)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`);
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK with success=true, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (!Array.isArray(data.data)) {
+      throw new Error('Expected data to be an array of orders');
+    }
+
+    if (typeof data.count !== 'number' || data.count !== data.data.length) {
+      throw new Error(`Expected count property to match array length (${data.data.length}), got ${data.count}`);
+    }
+
+    if (data.data.length === 0) {
+      throw new Error('Expected at least one order from previous tests');
+    }
+  });
+
+  // 37. GET /api/orders - verify order structure and sorting
+  await test('GET /api/orders (verify order structure, customer info, and newest-first order)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`);
+    const data = await res.json();
+    const orders = data.data;
+
+    // Check newest first
+    for (let i = 0; i < orders.length - 1; i++) {
+      if (orders[i].id < orders[i + 1].id) {
+        throw new Error(`Orders not sorted newest first: order ${orders[i].id} came before ${orders[i + 1].id}`);
+      }
+    }
+
+    // Check first order structure
+    const order = orders[0];
+    const requiredFields = ['id', 'customer', 'subtotal', 'deliveryFee', 'total', 'paymentMethod', 'paymentStatus', 'orderStatus', 'createdAt', 'items'];
+    for (const field of requiredFields) {
+      if (order[field] === undefined) {
+        throw new Error(`Order missing required field: ${field}`);
+      }
+    }
+
+    // Customer fields
+    const custFields = ['name', 'email', 'phone', 'address', 'city'];
+    for (const cf of custFields) {
+      if (!order.customer[cf]) {
+        throw new Error(`Order customer missing field: ${cf}`);
+      }
+    }
+
+    // Numerical checks
+    if (typeof order.total !== 'number' || typeof order.subtotal !== 'number' || typeof order.deliveryFee !== 'number') {
+      throw new Error('Order pricing totals must be numeric');
+    }
+  });
+
+  // 38. GET /api/orders - verify item details structure within orders
+  await test('GET /api/orders (verify items array and item details inside orders)', async () => {
+    const res = await fetch(`${BASE_URL}/orders`);
+    const data = await res.json();
+    const ordersWithItems = data.data.filter((o) => o.items && o.items.length > 0);
+
+    if (ordersWithItems.length === 0) {
+      throw new Error('Expected at least one order to have items');
+    }
+
+    const testItem = ordersWithItems[0].items[0];
+    const itemFields = ['id', 'productId', 'variantId', 'productName', 'size', 'colour', 'unitPrice', 'quantity', 'subtotal'];
+    for (const f of itemFields) {
+      if (testItem[f] === undefined) {
+        throw new Error(`Order item missing required field: ${f}`);
+      }
+    }
+
+    if (typeof testItem.unitPrice !== 'number' || typeof testItem.subtotal !== 'number' || typeof testItem.quantity !== 'number') {
+      throw new Error('Order item price and quantity must be numeric');
+    }
+  });
+
   console.log(`\n--- Test Summary: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) {
     process.exit(1);
