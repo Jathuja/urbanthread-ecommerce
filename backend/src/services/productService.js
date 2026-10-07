@@ -78,6 +78,22 @@ async function getProducts(filters = {}) {
 
   const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
+  // Determine ordering
+  let orderSQL = 'ORDER BY p.id ASC';
+  if (filters.sort === 'newest') {
+    orderSQL = 'ORDER BY p.created_at DESC, p.id DESC';
+  } else if (filters.sort === 'price_asc') {
+    orderSQL = 'ORDER BY p.price ASC';
+  } else if (filters.sort === 'price_desc') {
+    orderSQL = 'ORDER BY p.price DESC';
+  }
+
+  // Determine limit
+  let limitSQL = '';
+  if (filters.limit && !isNaN(filters.limit) && Number(filters.limit) > 0) {
+    limitSQL = `LIMIT ${parseInt(filters.limit, 10)}`;
+  }
+
   const sql = `
     SELECT 
       p.id,
@@ -93,7 +109,8 @@ async function getProducts(filters = {}) {
     FROM products p
     JOIN categories c ON p.category_id = c.id
     ${whereSQL}
-    ORDER BY p.id ASC
+    ${orderSQL}
+    ${limitSQL}
   `;
 
   const [products] = await db.query(sql, params);

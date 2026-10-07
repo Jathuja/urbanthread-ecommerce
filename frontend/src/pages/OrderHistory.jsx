@@ -6,7 +6,6 @@ import {
   Package,
   Calendar,
   CreditCard,
-  Truck,
   ArrowRight,
   Search,
   Filter,
@@ -18,7 +17,6 @@ import {
   ChevronDown,
   ChevronUp,
   MapPin,
-  ExternalLink,
   MessageSquare,
   DollarSign,
 } from 'lucide-react';
@@ -193,24 +191,21 @@ export default function OrderHistory() {
       if (s !== statusFilter) return false;
     }
 
-    // Search query: ID, customer name, phone, city
+    // Search query: ID or product name (customer-scoped search)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchId = String(order.id).includes(q) || `#${order.id}`.includes(q);
-      const matchName = order.customer?.name?.toLowerCase().includes(q);
-      const matchPhone = order.customer?.phone?.toLowerCase().includes(q);
-      const matchCity = order.customer?.city?.toLowerCase().includes(q);
       const matchItem = order.items?.some((item) =>
         item.productName?.toLowerCase().includes(q)
       );
-      return matchId || matchName || matchPhone || matchCity || matchItem;
+      return matchId || matchItem;
     }
 
     return true;
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+    <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="mb-6">
         <ol className="flex items-center space-x-2 text-sm text-gray-500">
@@ -220,7 +215,7 @@ export default function OrderHistory() {
             </Link>
           </li>
           <li className="text-gray-400">/</li>
-          <li className="text-gray-900 font-semibold">Order History</li>
+          <li className="text-gray-900 font-semibold">My Orders</li>
         </ol>
       </nav>
 
@@ -229,10 +224,10 @@ export default function OrderHistory() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-3">
             <Package className="w-8 h-8 text-indigo-600" />
-            Customer Orders
+            My Orders
           </h1>
           <p className="mt-1 text-sm text-gray-600">
-            View all placed orders, track shipment status, and inspect items & payment details.
+            Track your personal orders, shipment progress, and order summaries.
           </p>
         </div>
 
@@ -255,7 +250,7 @@ export default function OrderHistory() {
           </div>
           <input
             type="text"
-            placeholder="Search by Order #ID, customer name, phone, city, or product..."
+            placeholder="Search by Order #ID or product name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"

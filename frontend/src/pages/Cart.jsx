@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import {
@@ -40,15 +40,37 @@ export default function Cart() {
     updateQuantity,
     removeFromCart,
     clearCart,
+    validateAndSyncCart,
     formatLKR,
   } = useCart();
 
   const [confirmClear, setConfirmClear] = useState(false);
+  const [syncNotice, setSyncNotice] = useState(null);
+
+  // Validate cart against server on mount to detect stale/deleted items
+  useEffect(() => {
+    let isMounted = true;
+    if (cart.length > 0) {
+      validateAndSyncCart().then((res) => {
+        if (isMounted && res && res.hasChanges) {
+          setSyncNotice({
+            message:
+              'One or more items in your cart were no longer available or had updated inventory. Your cart has been refreshed.',
+            issues: res.issues,
+          });
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run on mount
 
   // If cart is completely empty
   if (cart.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16">
         {/* Breadcrumb */}
         <nav aria-label="Breadcrumb" className="mb-8">
           <ol className="flex items-center space-x-2 text-sm text-gray-500">
@@ -100,7 +122,7 @@ export default function Cart() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+    <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
       {/* Breadcrumb Navigation */}
       <nav aria-label="Breadcrumb" className="mb-6 sm:mb-8">
         <ol className="flex items-center space-x-2 text-sm text-gray-500">
@@ -125,6 +147,33 @@ export default function Cart() {
           </li>
         </ol>
       </nav>
+
+      {/* Sync / Inventory Refresh Notice */}
+      {syncNotice && (
+        <div
+          role="status"
+          className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-900 flex items-start space-x-3 text-xs sm:text-sm"
+        >
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-1">
+            <p className="font-bold text-amber-950">{syncNotice.message}</p>
+            {syncNotice.issues && syncNotice.issues.length > 0 && (
+              <ul className="list-disc list-inside text-amber-800 text-xs space-y-0.5 pt-1">
+                {syncNotice.issues.map((issue, idx) => (
+                  <li key={idx}>{issue}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setSyncNotice(null)}
+            className="text-amber-600 hover:text-amber-800 text-xs font-semibold px-2 py-1"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 pb-4 border-b border-gray-200">

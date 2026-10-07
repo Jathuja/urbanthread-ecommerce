@@ -15,7 +15,7 @@ export default function Footer() {
     <footer className="bg-white border-t border-gray-200 mt-auto">
       {/* Trust Highlights Strip */}
       <div className="border-b border-gray-100 bg-gray-50/60">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center sm:text-left">
             <div className="flex items-center space-x-3 justify-center sm:justify-start">
               <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
@@ -43,7 +43,7 @@ export default function Footer() {
               </div>
               <div>
                 <p className="text-xs font-bold text-gray-900">Secure Payments</p>
-                <p className="text-[11px] text-gray-500">PayHere Sandbox & COD</p>
+                <p className="text-[11px] text-gray-500">PayHere Sandbox & WhatsApp</p>
               </div>
             </div>
 
@@ -61,7 +61,7 @@ export default function Footer() {
       </div>
 
       {/* Main Footer Links */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-14">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-14">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8 lg:gap-10">
           {/* Brand Info (Span 2 cols on lg) */}
           <div className="lg:col-span-2 space-y-4">
@@ -121,7 +121,7 @@ export default function Footer() {
             <ul className="space-y-2.5 text-sm">
               <li>
                 <Link to="/orders" className="text-gray-600 hover:text-indigo-600 transition-colors">
-                  Order History & Tracking
+                  My Orders
                 </Link>
               </li>
               <li>
@@ -180,7 +180,7 @@ export default function Footer() {
           <div className="flex items-center space-x-4">
             <Link to="/products" className="hover:text-indigo-600 transition-colors">Shop</Link>
             <span>•</span>
-            <Link to="/orders" className="hover:text-indigo-600 transition-colors">Orders</Link>
+            <Link to="/orders" className="hover:text-indigo-600 transition-colors">My Orders</Link>
             <span>•</span>
             <Link to="/cart" className="hover:text-indigo-600 transition-colors">Cart</Link>
             <span>•</span>

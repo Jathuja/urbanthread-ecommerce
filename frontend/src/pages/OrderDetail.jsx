@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import {
   Package,
   Calendar,
   CreditCard,
-  Truck,
   ArrowLeft,
   RefreshCw,
   AlertCircle,
@@ -20,7 +19,6 @@ import {
   DollarSign,
   Copy,
   Check,
-  FileText,
   ShieldCheck,
   ExternalLink,
 } from 'lucide-react';
@@ -154,7 +152,6 @@ function getPaymentMethodDetails(method) {
 
 export default function OrderDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -224,7 +221,7 @@ export default function OrderDetail() {
             className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition-colors inline-flex items-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Order History</span>
+            <span>Back to My Orders</span>
           </Link>
         </div>
       </div>
@@ -253,7 +250,7 @@ export default function OrderDetail() {
       : null;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+    <div className="max-w-5xl 2xl:max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
       {/* Navigation / Back link */}
       <div className="flex items-center justify-between mb-6">
         <Link
@@ -261,7 +258,7 @@ export default function OrderDetail() {
           className="inline-flex items-center gap-2 text-sm font-semibold text-gray-600 hover:text-indigo-600 transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to All Orders</span>
+          <span>Back to My Orders</span>
         </Link>
 
         <div className="flex items-center gap-2">

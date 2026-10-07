@@ -1882,6 +1882,230 @@ async function runTests() {
     if (res2.status !== 403) throw new Error(`Expected 403 for customer PUT order status, got ${res2.status}`);
   });
 
+  // 88. Registration security: Public registration ignores role: "admin" and assigns "customer"
+  await test('Registration security: Public registration with role="admin" assigns role="customer"', async () => {
+    const maliciousEmail = `hack_admin_${Date.now()}@example.com`;
+    const res = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Hacker User',
+        email: maliciousEmail,
+        password: 'Password123!',
+        role: 'admin', // Attempted privilege escalation
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 201 || !data.success) {
+      throw new Error(`Expected 201 Created for registration, got ${res.status}`);
+    }
+    if (data.data.user.role !== 'customer') {
+      throw new Error(`CRITICAL SECURITY FAILURE: User registered with role "${data.data.user.role}" instead of "customer"`);
+    }
+
+    // Verify /me endpoint also returns role="customer"
+    const meRes = await fetch(`${BASE_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${data.data.token}` },
+    });
+    const meData = await meRes.json();
+    if (meData.data.user.role !== 'customer') {
+      throw new Error(`CRITICAL SECURITY FAILURE: Token claims role "${meData.data.user.role}" instead of "customer"`);
+    }
+  });
+
+  // 89. Authenticated profile update: PUT /api/auth/profile
+  await test('PUT /api/auth/profile updates customer fields (200 OK)', async () => {
+    const updatedName = 'Updated Customer Name';
+    const updatedPhone = '0779998877';
+    const updatedAddress = '99 Updated Galle Road';
+    const updatedCity = 'Kandy';
+
+    const res = await fetch(`${BASE_URL}/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${tokenCustomerA}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: updatedName,
+        phone: updatedPhone,
+        address: updatedAddress,
+        city: updatedCity,
+      }),
+    });
+    const data = await res.json();
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+    if (data.data.user.name !== updatedName || data.data.user.city !== updatedCity) {
+      throw new Error(`Profile data mismatch: ${JSON.stringify(data.data.user)}`);
+    }
+    if (data.data.user.password_hash !== undefined) {
+      throw new Error('SECURITY VIOLATION: password_hash leaked in profile update response');
+    }
+  });
+
+  // 90. Unauthenticated profile update (401 Unauthorized)
+  await test('PUT /api/auth/profile unauthenticated (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/profile`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Anonymous Update' }),
+    });
+    if (res.status !== 401) throw new Error(`Expected 401 Unauthorized, got ${res.status}`);
+  });
+
+  // 91. Profile update validation: name < 2 chars (400 Bad Request)
+  await test('PUT /api/auth/profile with invalid name (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/profile`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${tokenCustomerA}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name: 'A' }),
+    });
+    if (res.status !== 400) throw new Error(`Expected 400 Bad Request, got ${res.status}`);
+  });
+
+  // 92. Authenticated password change with wrong current password (400 Bad Request)
+  await test('PUT /api/auth/password with wrong current password (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/password`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${tokenCustomerA}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        currentPassword: 'WrongPassword999!',
+        newPassword: 'NewValidPassword123!',
+      }),
+    });
+    if (res.status !== 400) throw new Error(`Expected 400 Bad Request for incorrect current password, got ${res.status}`);
+  });
+
+  // 93. Password change with confirmation mismatch (400 Bad Request)
+  await test('PUT /api/auth/password with confirmation mismatch (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/password`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${tokenCustomerA}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        currentPassword: testCustomerA.password,
+        newPassword: 'NewValidPassword123!',
+        confirmPassword: 'MismatchPassword456!',
+      }),
+    });
+    if (res.status !== 400) throw new Error(`Expected 400 Bad Request for password mismatch, got ${res.status}`);
+  });
+
+  // 94. Password change with short new password (400 Bad Request)
+  await test('PUT /api/auth/password with short new password (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/password`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${tokenCustomerA}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        currentPassword: testCustomerA.password,
+        newPassword: '123',
+      }),
+    });
+    if (res.status !== 400) throw new Error(`Expected 400 Bad Request for password < 6 chars, got ${res.status}`);
+  });
+
+  // 95. Successful password change and verification via login (200 OK)
+  await test('PUT /api/auth/password changes password and verifies login with new password (200 OK)', async () => {
+    const newPass = 'NewBrandPass2026!';
+    const res = await fetch(`${BASE_URL}/auth/password`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${tokenCustomerA}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        currentPassword: testCustomerA.password,
+        newPassword: newPass,
+        confirmPassword: newPass,
+      }),
+    });
+    if (res.status !== 200) throw new Error(`Expected 200 OK for password change, got ${res.status}`);
+
+    // Verify old password fails
+    const oldLoginRes = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testCustomerA.email,
+        password: testCustomerA.password,
+      }),
+    });
+    if (oldLoginRes.status !== 401) throw new Error(`Expected 401 for old password, got ${oldLoginRes.status}`);
+
+    // Verify new password succeeds
+    const newLoginRes = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testCustomerA.email,
+        password: newPass,
+      }),
+    });
+    if (newLoginRes.status !== 200) throw new Error(`Expected 200 for new password login, got ${newLoginRes.status}`);
+
+    // Restore original password for any subsequent tests
+    const restoreRes = await fetch(`${BASE_URL}/auth/password`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${tokenCustomerA}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        currentPassword: newPass,
+        newPassword: testCustomerA.password,
+        confirmPassword: testCustomerA.password,
+      }),
+    });
+    if (restoreRes.status !== 200) throw new Error(`Failed to restore original test password, got ${restoreRes.status}`);
+  });
+
+  // 96. Unauthenticated password update (401 Unauthorized)
+  await test('PUT /api/auth/password unauthenticated (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        currentPassword: 'any',
+        newPassword: 'any',
+      }),
+    });
+    if (res.status !== 401) throw new Error(`Expected 401 Unauthorized, got ${res.status}`);
+  });
+
+  // 97. New arrivals API: GET /api/products?sort=newest&limit=4 returns sorted newest products
+  await test('GET /api/products?sort=newest&limit=4 returns real newest products (200 OK)', async () => {
+    const res = await fetch(`${BASE_URL}/products?sort=newest&limit=4`);
+    const data = await res.json();
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK, got ${res.status}`);
+    }
+    if (!Array.isArray(data.data) || data.data.length === 0 || data.data.length > 4) {
+      throw new Error(`Expected between 1 and 4 products, got ${data.data?.length}`);
+    }
+
+    // Verify descending order of created_at
+    for (let i = 0; i < data.data.length - 1; i++) {
+      const currTime = new Date(data.data[i].created_at).getTime();
+      const nextTime = new Date(data.data[i + 1].created_at).getTime();
+      if (currTime < nextTime) {
+        throw new Error(`Products not sorted descending by created_at: ${currTime} < ${nextTime}`);
+      }
+    }
+  });
+
   console.log(`\n--- Test Summary: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) {
     process.exit(1);

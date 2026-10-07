@@ -5,7 +5,6 @@ import { useAuth } from '../context/AuthContext';
 import {
   ShieldCheck,
   Package,
-  LayoutDashboard,
   ShoppingBag,
   Users,
   Clock,
@@ -14,7 +13,6 @@ import {
   RefreshCw,
   AlertCircle,
   TrendingUp,
-  ExternalLink,
   CheckCircle2,
   XCircle,
   ArrowUpRight,
@@ -77,7 +75,7 @@ export default function AdminDashboard() {
     });
   };
 
-  const getStatusBadge = (status, type = 'order') => {
+  const getStatusBadge = (status, _type = 'order') => {
     const s = (status || '').toLowerCase();
     if (s === 'delivered' || s === 'paid' || s === 'completed') {
       return (
@@ -182,30 +180,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Admin Subnav Tabs */}
-          <div className="flex items-center space-x-2 mt-6 pt-4 border-t border-indigo-700/50">
-            <Link
-              to="/admin"
-              className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-indigo-900 shadow-sm"
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Overview</span>
-            </Link>
-            <Link
-              to="/admin/products"
-              className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-200 hover:bg-white/10 transition-colors"
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>Products</span>
-            </Link>
-            <Link
-              to="/admin/orders"
-              className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-200 hover:bg-white/10 transition-colors"
-            >
-              <ShoppingBag className="w-3.5 h-3.5" />
-              <span>Orders</span>
-            </Link>
-          </div>
+
         </div>
       </div>
 
@@ -353,24 +328,30 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-gray-100">
-              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                <p className="text-xs font-semibold text-gray-800 flex items-center">
+              <Link
+                to="/admin/products"
+                className="p-3 bg-gray-50 hover:bg-indigo-50 rounded-xl border border-gray-100 hover:border-indigo-200 transition-colors group"
+              >
+                <p className="text-xs font-semibold text-gray-800 group-hover:text-indigo-700 flex items-center">
                   <Package className="w-3.5 h-3.5 text-indigo-600 mr-1.5" />
                   Product Management
                 </p>
                 <p className="text-[11px] text-gray-500 mt-0.5">
-                  Scheduled for upcoming assessment release
+                  Manage products, variants, pricing and inventory.
                 </p>
-              </div>
-              <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                <p className="text-xs font-semibold text-gray-800 flex items-center">
+              </Link>
+              <Link
+                to="/admin/orders"
+                className="p-3 bg-gray-50 hover:bg-purple-50 rounded-xl border border-gray-100 hover:border-purple-200 transition-colors group"
+              >
+                <p className="text-xs font-semibold text-gray-800 group-hover:text-purple-700 flex items-center">
                   <ShoppingBag className="w-3.5 h-3.5 text-purple-600 mr-1.5" />
                   Order Management
                 </p>
                 <p className="text-[11px] text-gray-500 mt-0.5">
-                  Scheduled for upcoming assessment release
+                  Review customer orders, payments and fulfillment status.
                 </p>
-              </div>
+              </Link>
             </div>
           </div>
         </div>

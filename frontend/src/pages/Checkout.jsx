@@ -27,7 +27,6 @@ import {
   ExternalLink,
   Copy,
   Check,
-  RefreshCw,
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
@@ -57,6 +56,7 @@ const PAYMENT_METHODS = [
     icon: MessageSquare,
     badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     iconBg: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+    isPrimary: true,
   },
   {
     id: 'payhere',
@@ -66,6 +66,7 @@ const PAYMENT_METHODS = [
     icon: CreditCard,
     badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     iconBg: 'bg-indigo-50 text-indigo-600 border-indigo-100',
+    isPrimary: true,
   },
   {
     id: 'cash_on_delivery',
@@ -75,11 +76,12 @@ const PAYMENT_METHODS = [
     icon: Banknote,
     badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
     iconBg: 'bg-amber-50 text-amber-600 border-amber-100',
+    isPrimary: false,
   },
 ];
 
 export default function Checkout() {
-  const { cart, cartCount, cartTotal, clearCart, formatLKR } = useCart();
+  const { cart, cartCount, cartTotal, clearCart, validateAndSyncCart, formatLKR } = useCart();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
 
@@ -116,6 +118,27 @@ export default function Checkout() {
   const [serverError, setServerError] = useState(null);
   const [isInsufficientStock, setIsInsufficientStock] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cartSyncNotice, setCartSyncNotice] = useState(null);
+
+  // Validate cart against server on mount to detect stale/deleted items
+  useEffect(() => {
+    let isMounted = true;
+    if (cart.length > 0) {
+      validateAndSyncCart().then((res) => {
+        if (isMounted && res && res.hasChanges) {
+          setCartSyncNotice({
+            message:
+              'One or more items in your cart were no longer available or had updated inventory. Your cart has been refreshed.',
+            issues: res.issues,
+          });
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Success state holding receipt snapshot
   const [orderSuccess, setOrderSuccess] = useState(null);
@@ -123,7 +146,7 @@ export default function Checkout() {
   const [copiedMessage, setCopiedMessage] = useState(false);
 
   // PayHere return callback state
-  const [payhereReturnNotice, setPayhereReturnNotice] = useState(() => {
+  const [payhereReturnNotice] = useState(() => {
     if (payhereQueryStatus && payhereQueryOrderId) {
       return { status: payhereQueryStatus, orderId: payhereQueryOrderId };
     }
@@ -265,6 +288,20 @@ export default function Checkout() {
 
     setIsSubmitting(true);
 
+    // Verify cart items against backend product and variant catalog before creating order
+    try {
+      const syncCheck = await validateAndSyncCart();
+      if (!syncCheck.valid || syncCheck.hasChanges) {
+        setIsSubmitting(false);
+        setServerError(
+          'One or more items in your cart were no longer available or had updated inventory. Your cart has been refreshed. Please review your order before placing it.'
+        );
+        return;
+      }
+    } catch {
+      // Proceed if validation network error
+    }
+
     // Prepare payload (Only send IDs & quantities, NEVER send client-calculated prices)
     const payload = {
       customer: {
@@ -346,20 +383,30 @@ export default function Checkout() {
         if (status === 409) {
           setIsInsufficientStock(true);
           setServerError(
-            data?.message ||
-              'Some items are no longer available in the requested quantity. Please return to your cart and update the quantity.'
+            'Some items in your cart exceed available stock. Your cart has been updated with the latest quantities. Please review and try again.'
           );
+          validateAndSyncCart();
+        } else if (status === 404) {
+          // Never display internal strings such as "variantId 21, productId 4"
+          setServerError(
+            'Unable to complete checkout because one or more items in your cart are no longer available. Your cart has been refreshed. Please review your items.'
+          );
+          validateAndSyncCart();
         } else if (status === 400) {
-          if (Array.isArray(data?.errors) && data.errors.length > 0) {
+          const rawMsg = data?.message || '';
+          if (
+            rawMsg.toLowerCase().includes('no longer active') ||
+            rawMsg.toLowerCase().includes('inactive')
+          ) {
+            setServerError(
+              'One or more products in your cart are no longer active. Your cart has been refreshed. Please review your order.'
+            );
+            validateAndSyncCart();
+          } else if (Array.isArray(data?.errors) && data.errors.length > 0) {
             setServerError(data.errors.join(' • '));
           } else {
-            setServerError(data?.message || 'Please verify your details and try again.');
+            setServerError(data?.message || 'Please verify your customer details and try again.');
           }
-        } else if (status === 404) {
-          setServerError(
-            data?.message ||
-              'One or more selected products or variants could not be found. Please review your cart.'
-          );
         } else {
           setServerError(
             'Unable to process your order at this time. Please try again or contact support.'
@@ -830,7 +877,7 @@ export default function Checkout() {
   // ACTIVE CHECKOUT FORM & SUMMARY VIEW
   // ==========================================
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+    <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
       {/* Breadcrumb */}
       <nav aria-label="Breadcrumb" className="mb-6 sm:mb-8">
         <ol className="flex items-center space-x-2 text-xs sm:text-sm text-gray-500">
@@ -873,6 +920,33 @@ export default function Checkout() {
           Complete your customer information and select your preferred payment option.
         </p>
       </div>
+
+      {/* Cart Inventory Sync Notice */}
+      {cartSyncNotice && (
+        <div
+          role="status"
+          className="mb-8 p-4 sm:p-5 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-900 flex items-start space-x-3.5 text-xs sm:text-sm"
+        >
+          <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="flex-1 space-y-1">
+            <p className="font-bold text-amber-950">{cartSyncNotice.message}</p>
+            {cartSyncNotice.issues && cartSyncNotice.issues.length > 0 && (
+              <ul className="list-disc list-inside text-amber-800 text-xs space-y-0.5 pt-1">
+                {cartSyncNotice.issues.map((issue, idx) => (
+                  <li key={idx}>{issue}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setCartSyncNotice(null)}
+            className="text-amber-600 hover:text-amber-800 text-xs font-semibold px-2 py-1"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Global Server / Stock Error Banner */}
       {serverError && (
@@ -1157,56 +1231,120 @@ export default function Checkout() {
               </div>
 
               {/* Radio Group / Selectable Cards */}
-              <fieldset className="mt-6 space-y-3.5">
+              <fieldset className="mt-6 space-y-5">
                 <legend className="sr-only">Choose a payment method</legend>
-                {PAYMENT_METHODS.map((method) => {
-                  const Icon = method.icon;
-                  const isSelected = paymentMethod === method.id;
 
-                  return (
-                    <label
-                      key={method.id}
-                      htmlFor={`payment-${method.id}`}
-                      className={`relative flex items-start p-4 sm:p-5 rounded-2xl border-2 transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-indigo-600 bg-indigo-50/30 shadow-sm'
-                          : 'border-gray-200/80 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        id={`payment-${method.id}`}
-                        name="paymentMethod"
-                        value={method.id}
-                        checked={isSelected}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
-                      />
-                      <div className="ml-3.5 flex-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                        <div className="flex items-start space-x-3">
+                {/* Primary Recommended Methods (WhatsApp & PayHere) */}
+                <div>
+                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">
+                    Recommended Payment Methods
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {PAYMENT_METHODS.filter((m) => m.isPrimary).map((method) => {
+                      const Icon = method.icon;
+                      const isSelected = paymentMethod === method.id;
+
+                      return (
+                        <label
+                          key={method.id}
+                          htmlFor={`payment-${method.id}`}
+                          className={`relative flex flex-col justify-between p-4 sm:p-5 rounded-2xl border-2 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-indigo-600 bg-indigo-50/40 shadow-sm ring-1 ring-indigo-500'
+                              : 'border-gray-200/90 hover:border-gray-300 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-3">
+                            <div className="flex items-center space-x-3">
+                              <div
+                                className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${method.iconBg}`}
+                              >
+                                <Icon className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <span className="text-sm font-bold text-gray-900 block leading-snug">
+                                  {method.title}
+                                </span>
+                              </div>
+                            </div>
+                            <input
+                              type="radio"
+                              id={`payment-${method.id}`}
+                              name="paymentMethod"
+                              value={method.id}
+                              checked={isSelected}
+                              onChange={(e) => setPaymentMethod(e.target.value)}
+                              className="mt-1 h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 shrink-0"
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500 leading-relaxed mb-3">
+                            {method.description}
+                          </p>
+                          <div>
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${method.badgeColor}`}
+                            >
+                              {method.badge}
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Alternative Payment Option (Cash on Delivery) */}
+                <div className="pt-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5">
+                    Alternative Payment Option
+                  </p>
+                  {PAYMENT_METHODS.filter((m) => !m.isPrimary).map((method) => {
+                    const Icon = method.icon;
+                    const isSelected = paymentMethod === method.id;
+
+                    return (
+                      <label
+                        key={method.id}
+                        htmlFor={`payment-${method.id}`}
+                        className={`relative flex items-center justify-between p-3.5 sm:p-4 rounded-xl border transition-all cursor-pointer ${
+                          isSelected
+                            ? 'border-indigo-600 bg-indigo-50/30 ring-1 ring-indigo-500'
+                            : 'border-gray-200 hover:border-gray-300 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <input
+                            type="radio"
+                            id={`payment-${method.id}`}
+                            name="paymentMethod"
+                            value={method.id}
+                            checked={isSelected}
+                            onChange={(e) => setPaymentMethod(e.target.value)}
+                            className="h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500"
+                          />
                           <div
-                            className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${method.iconBg}`}
+                            className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${method.iconBg}`}
                           >
-                            <Icon className="w-5 h-5" />
+                            <Icon className="w-4 h-4" />
                           </div>
                           <div>
-                            <span className="text-sm sm:text-base font-bold text-gray-900 block">
+                            <span className="text-xs sm:text-sm font-semibold text-gray-900 block">
                               {method.title}
                             </span>
-                            <span className="text-xs text-gray-500 block mt-0.5 leading-relaxed">
+                            <span className="text-[11px] text-gray-500 block">
                               {method.description}
                             </span>
                           </div>
                         </div>
                         <span
-                          className={`self-start sm:self-auto inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${method.badgeColor}`}
+                          className={`hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${method.badgeColor}`}
                         >
                           {method.badge}
                         </span>
-                      </div>
-                    </label>
-                  );
-                })}
+                      </label>
+                    );
+                  })}
+                </div>
               </fieldset>
             </div>
 
