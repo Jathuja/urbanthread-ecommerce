@@ -23,6 +23,7 @@ import {
   Tag,
   LayoutDashboard,
   ShieldCheck,
+  ShoppingBag,
   X,
   AlertTriangle,
 } from 'lucide-react';
@@ -411,6 +412,17 @@ export default function AdminProducts() {
             >
               <Package className="w-3.5 h-3.5" />
               <span>Products</span>
+            </Link>
+            <Link
+              to="/admin/orders"
+              className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                location.pathname === '/admin/orders'
+                  ? 'bg-white text-indigo-900 shadow-sm'
+                  : 'text-indigo-200 hover:bg-white/10'
+              }`}
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Orders</span>
             </Link>
           </div>
         </div>

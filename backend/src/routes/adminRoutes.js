@@ -2,12 +2,17 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const adminProductController = require('../controllers/adminProductController');
+const adminOrderController = require('../controllers/adminOrderController');
 const { authenticate, requireAdmin } = require('../middleware/authMiddleware');
 const {
   validateCreateProduct,
   validateUpdateProduct,
   validateVariantPayload,
 } = require('../middleware/validateAdminProduct');
+const {
+  validateAdminOrderId,
+  validateUpdateOrderStatus,
+} = require('../middleware/validateAdminOrder');
 
 // Apply authentication and admin role requirement to all /api/admin routes
 router.use(authenticate, requireAdmin);
@@ -26,5 +31,11 @@ router.delete('/products/:id', adminProductController.deleteProduct);
 router.post('/products/:id/variants', validateVariantPayload, adminProductController.addVariant);
 router.put('/products/:id/variants/:variantId', validateVariantPayload, adminProductController.updateVariant);
 router.delete('/products/:id/variants/:variantId', adminProductController.deleteVariant);
+
+// Orders Management
+router.get('/orders', adminOrderController.getOrders);
+router.get('/orders/:id', validateAdminOrderId, adminOrderController.getOrderById);
+router.put('/orders/:id/status', validateAdminOrderId, validateUpdateOrderStatus, adminOrderController.updateOrderStatus);
+router.patch('/orders/:id/status', validateAdminOrderId, validateUpdateOrderStatus, adminOrderController.updateOrderStatus);
 
 module.exports = router;

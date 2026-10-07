@@ -198,6 +198,13 @@ export default function AdminDashboard() {
               <Package className="w-3.5 h-3.5" />
               <span>Products</span>
             </Link>
+            <Link
+              to="/admin/orders"
+              className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-200 hover:bg-white/10 transition-colors"
+            >
+              <ShoppingBag className="w-3.5 h-3.5" />
+              <span>Orders</span>
+            </Link>
           </div>
         </div>
       </div>
@@ -233,25 +240,31 @@ export default function AdminDashboard() {
           </Link>
 
           {/* Card 2: Total Orders */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <Link
+            to="/admin/orders"
+            className="group bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md hover:border-purple-200 transition-all block"
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider group-hover:text-purple-600 transition-colors">
                   Total Orders
                 </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">
                   {stats.totalOrders ?? 0}
                 </h3>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600">
+              <div className="w-12 h-12 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all">
                 <ShoppingBag className="w-6 h-6" />
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center text-xs text-gray-500">
-              <Calendar className="w-3.5 h-3.5 text-purple-500 mr-1" />
-              <span>{stats.todayOrders ?? 0} placed today</span>
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+              <span className="flex items-center">
+                <Calendar className="w-3.5 h-3.5 text-purple-500 mr-1" />
+                <span>{stats.todayOrders ?? 0} placed today</span>
+              </span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-purple-600 transition-colors" />
             </div>
-          </div>
+          </Link>
 
           {/* Card 3: Pending Orders */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
@@ -371,9 +384,18 @@ export default function AdminDashboard() {
                 Displaying the 5 most recent orders placed in the system
               </p>
             </div>
-            <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-              {recentOrders.length} orders
-            </span>
+            <div className="flex items-center space-x-3">
+              <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                {recentOrders.length} orders
+              </span>
+              <Link
+                to="/admin/orders"
+                className="inline-flex items-center space-x-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                <span>Manage All</span>
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
 
           {recentOrders.length === 0 ? (

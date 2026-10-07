@@ -1619,6 +1619,269 @@ async function runTests() {
     }
   });
 
+  // ===================================================
+  // ADMIN ORDER MANAGEMENT TESTS (Tests 74 - 87)
+  // ===================================================
+
+  let testOrderIdForAdmin = null;
+
+  // 74. GET /api/admin/orders unauthenticated (401 Unauthorized)
+  await test('GET /api/admin/orders unauthenticated (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders`);
+    const data = await res.json();
+
+    if (res.status !== 401 || data.success !== false) {
+      throw new Error(`Expected 401 Unauthorized, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 75. GET /api/admin/orders with customer token (403 Forbidden - RBAC)
+  await test('GET /api/admin/orders with customer token (403 Forbidden - RBAC)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders`, {
+      headers: { Authorization: `Bearer ${tokenCustomerA}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 403 || data.success !== false) {
+      throw new Error(`Expected 403 Forbidden for customer, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 76. GET /api/admin/orders with invalid token (401 Unauthorized)
+  await test('GET /api/admin/orders with invalid token (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders`, {
+      headers: { Authorization: 'Bearer invalid_admin_token_xyz' },
+    });
+    const data = await res.json();
+
+    if (res.status !== 401 || data.success !== false) {
+      throw new Error(`Expected 401 Unauthorized, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 77. GET /api/admin/orders with admin token (200 OK - lists all orders)
+  await test('GET /api/admin/orders with admin token (200 OK - lists all orders)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success || !Array.isArray(data.data)) {
+      throw new Error(`Expected 200 OK and orders array, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (data.data.length === 0) {
+      throw new Error('Expected at least 1 order in admin orders list');
+    }
+
+    const first = data.data[0];
+    testOrderIdForAdmin = first.id;
+
+    if (!first.id || !first.customer || !first.total || !first.orderStatus || !first.paymentStatus) {
+      throw new Error(`Order payload missing core fields: ${JSON.stringify(first)}`);
+    }
+
+    if (!Array.isArray(first.items) || first.items.length === 0) {
+      throw new Error(`Order payload missing items: ${JSON.stringify(first)}`);
+    }
+  });
+
+  // 78. GET /api/admin/orders with search filter (200 OK)
+  await test('GET /api/admin/orders with search filter (200 OK)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders?search=${testOrderIdForAdmin}`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success || !Array.isArray(data.data)) {
+      throw new Error(`Expected 200 OK for search, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (!data.data.some((o) => o.id === testOrderIdForAdmin)) {
+      throw new Error(`Search for order ID ${testOrderIdForAdmin} did not return the order`);
+    }
+  });
+
+  // 79. GET /api/admin/orders with status filter (200 OK)
+  await test('GET /api/admin/orders with order_status filter (200 OK)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders?order_status=pending`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for status filter, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    // Verify all returned orders match requested status
+    for (const o of data.data) {
+      if (o.orderStatus !== 'pending') {
+        throw new Error(`Expected all orders to be pending, got ${o.orderStatus}`);
+      }
+    }
+  });
+
+  // 80. GET /api/admin/orders/:id with admin token (200 OK)
+  await test('GET /api/admin/orders/:id with admin token (200 OK - returns order details)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders/${testOrderIdForAdmin}`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success || !data.data) {
+      throw new Error(`Expected 200 OK for order details, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    const o = data.data;
+    if (o.id !== testOrderIdForAdmin || !o.customer?.name || !o.customer?.phone || !o.customer?.address) {
+      throw new Error(`Incomplete customer/delivery details in order response: ${JSON.stringify(o)}`);
+    }
+
+    if (!Array.isArray(o.items) || o.items.length === 0) {
+      throw new Error(`Order details missing items: ${JSON.stringify(o)}`);
+    }
+
+    const item = o.items[0];
+    if (!item.productName || !item.size || !item.colour || item.unitPrice === undefined || item.quantity === undefined) {
+      throw new Error(`Order item missing required fields: ${JSON.stringify(item)}`);
+    }
+  });
+
+  // 81. GET /api/admin/orders/abc (400 Bad Request)
+  await test('GET /api/admin/orders/abc invalid order ID (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders/abc`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    if (res.status !== 400) {
+      throw new Error(`Expected 400 Bad Request for non-integer order ID, got ${res.status}`);
+    }
+  });
+
+  // 82. GET /api/admin/orders/99999 (404 Not Found)
+  await test('GET /api/admin/orders/99999 non-existent order (404 Not Found)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders/99999`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    if (res.status !== 404) {
+      throw new Error(`Expected 404 Not Found for non-existent order ID, got ${res.status}`);
+    }
+  });
+
+  // 83. PUT /api/admin/orders/:id/status with invalid status (400 Bad Request)
+  await test('PUT /api/admin/orders/:id/status with invalid status (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/orders/${testOrderIdForAdmin}/status`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'not_a_valid_status' }),
+    });
+    if (res.status !== 400) {
+      throw new Error(`Expected 400 for invalid status, got ${res.status}`);
+    }
+  });
+
+  // 84. PUT /api/admin/orders/:id/status with valid status update (200 OK)
+  await test('PUT /api/admin/orders/:id/status valid status transition (200 OK)', async () => {
+    // Transition to confirmed
+    const res = await fetch(`${BASE_URL}/admin/orders/${testOrderIdForAdmin}/status`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'confirmed' }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success || data.data?.orderStatus !== 'confirmed') {
+      throw new Error(`Expected 200 OK and orderStatus: confirmed, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    // Further transition: confirmed -> processing -> shipped
+    const res2 = await fetch(`${BASE_URL}/admin/orders/${testOrderIdForAdmin}/status`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'processing' }),
+    });
+    if (res2.status !== 200) throw new Error(`Expected 200 OK for processing transition, got ${res2.status}`);
+
+    const res3 = await fetch(`${BASE_URL}/admin/orders/${testOrderIdForAdmin}/status`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'shipped' }),
+    });
+    if (res3.status !== 200) throw new Error(`Expected 200 OK for shipped transition, got ${res3.status}`);
+  });
+
+  // 85. Status lifecycle protection: terminal state (delivered) cannot transition back (400 Bad Request)
+  await test('Status lifecycle protection: delivered terminal state cannot transition back (400 Bad Request)', async () => {
+    // Transition shipped -> delivered
+    const deliverRes = await fetch(`${BASE_URL}/admin/orders/${testOrderIdForAdmin}/status`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'delivered' }),
+    });
+    if (deliverRes.status !== 200) throw new Error(`Expected 200 OK for delivered transition, got ${deliverRes.status}`);
+
+    // Attempt invalid transition: delivered -> pending
+    const invalidRes = await fetch(`${BASE_URL}/admin/orders/${testOrderIdForAdmin}/status`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'pending' }),
+    });
+    if (invalidRes.status !== 400) {
+      throw new Error(`Expected 400 Bad Request for delivered -> pending transition, got ${invalidRes.status}`);
+    }
+  });
+
+  // 86. Payment status security: Admin cannot falsely mark PayHere payment as paid through order-status API
+  await test('Payment status security: Admin cannot falsely mark PayHere payment as paid through order-status API', async () => {
+    // Find an unpaid order in list
+    const listRes = await fetch(`${BASE_URL}/admin/orders`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const listData = await listRes.json();
+    const unpaidOrder = listData.data.find((o) => o.paymentStatus !== 'paid' && o.orderStatus !== 'delivered' && o.orderStatus !== 'cancelled');
+
+    if (unpaidOrder) {
+      const originalPaymentStatus = unpaidOrder.paymentStatus;
+
+      // Attempt to manipulate payment_status to 'paid' via status endpoint
+      const res = await fetch(`${BASE_URL}/admin/orders/${unpaidOrder.id}/status`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'confirmed',
+          payment_status: 'paid', // Malicious attempt to force payment status
+          paymentStatus: 'paid',
+        }),
+      });
+      const data = await res.json();
+
+      if (res.status !== 200 || !data.success) {
+        throw new Error(`Expected 200 OK for order status update, got ${res.status}`);
+      }
+
+      // Verify paymentStatus was NOT changed to paid
+      if (data.data.paymentStatus !== originalPaymentStatus) {
+        throw new Error(`SECURITY VIOLATION: Payment status was modified from ${originalPaymentStatus} to ${data.data.paymentStatus}`);
+      }
+    }
+  });
+
+  // 87. Customer cannot access admin order endpoints (403 Forbidden)
+  await test('Customer cannot access admin order endpoints (403 Forbidden - RBAC)', async () => {
+    // Customer GET /api/admin/orders/:id
+    const res1 = await fetch(`${BASE_URL}/admin/orders/${testOrderIdForAdmin}`, {
+      headers: { Authorization: `Bearer ${tokenCustomerA}` },
+    });
+    if (res1.status !== 403) throw new Error(`Expected 403 for customer GET order details, got ${res1.status}`);
+
+    // Customer PUT /api/admin/orders/:id/status
+    const res2 = await fetch(`${BASE_URL}/admin/orders/${testOrderIdForAdmin}/status`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenCustomerA}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'shipped' }),
+    });
+    if (res2.status !== 403) throw new Error(`Expected 403 for customer PUT order status, got ${res2.status}`);
+  });
+
   console.log(`\n--- Test Summary: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) {
     process.exit(1);
