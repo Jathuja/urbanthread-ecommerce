@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   ShoppingBag,
   ShoppingCart,
@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   Package,
   LayoutDashboard,
+  ExternalLink,
   Menu,
   X,
 } from 'lucide-react';
@@ -19,10 +20,11 @@ export default function Navbar() {
   const { cartCount } = useCart();
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   const navLinkClass = ({ isActive }) =>
@@ -39,6 +41,9 @@ export default function Navbar() {
   // CASE 1: UNAUTHENTICATED (GUEST) NAVBAR
   // ──────────────────────────────────────────
   if (!isAuthenticated) {
+    const isLoginPage = location.pathname === '/login';
+    const isRegisterPage = location.pathname === '/register';
+
     return (
       <header className="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -57,23 +62,51 @@ export default function Navbar() {
               </span>
             </Link>
 
-            {/* Guest Actions (Sign In / Create Account) */}
+            {/* Guest Actions */}
             <div className="flex items-center space-x-3">
-              <Link
-                to="/login"
-                id="guest-signin-btn"
-                className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:text-indigo-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors"
-              >
-                <User className="w-4 h-4 text-gray-500" />
-                <span>Sign In</span>
-              </Link>
-              <Link
-                to="/register"
-                id="guest-register-btn"
-                className="inline-flex items-center space-x-1 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
-              >
-                <span>Create Account</span>
-              </Link>
+              {/* On login page: keep ONLY Create Account in header */}
+              {isLoginPage && (
+                <Link
+                  to="/register"
+                  id="guest-register-btn"
+                  className="inline-flex items-center space-x-1 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
+                >
+                  <span>Create Account</span>
+                </Link>
+              )}
+
+              {/* On register page: keep ONLY Sign In in header */}
+              {isRegisterPage && (
+                <Link
+                  to="/login"
+                  id="guest-signin-btn"
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
+                >
+                  <User className="w-4 h-4" />
+                  <span>Sign In</span>
+                </Link>
+              )}
+
+              {/* Default fallback on other unauthenticated routes */}
+              {!isLoginPage && !isRegisterPage && (
+                <>
+                  <Link
+                    to="/login"
+                    id="guest-signin-btn"
+                    className="inline-flex items-center space-x-1.5 px-4 py-2 text-xs sm:text-sm font-semibold text-gray-700 hover:text-indigo-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors"
+                  >
+                    <User className="w-4 h-4 text-gray-500" />
+                    <span>Sign In</span>
+                  </Link>
+                  <Link
+                    to="/register"
+                    id="guest-register-btn"
+                    className="inline-flex items-center space-x-1 px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
+                  >
+                    <span>Create Account</span>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -89,10 +122,10 @@ export default function Navbar() {
       <header className="bg-white/95 backdrop-blur-md border-b border-purple-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            {/* Admin Branding */}
+            {/* Admin Branding -> Leads to /admin/dashboard */}
             <div className="flex items-center space-x-3">
               <Link
-                to="/admin"
+                to="/admin/dashboard"
                 className="flex items-center space-x-2 text-xl font-bold tracking-tight text-gray-900 group"
                 id="admin-logo-brand"
               >
@@ -102,15 +135,15 @@ export default function Navbar() {
                 <span className="font-extrabold text-gray-900 tracking-tight">
                   Urban<span className="text-purple-700">Thread</span>
                 </span>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-black bg-purple-100 text-purple-800 border border-purple-200 uppercase tracking-wider ml-1">
+                  ADMIN
+                </span>
               </Link>
-              <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200 uppercase tracking-wider">
-                Admin
-              </span>
             </div>
 
-            {/* Admin Desktop Navigation Links */}
-            <nav className="hidden md:flex items-center space-x-8">
-              <NavLink to="/admin" end className={adminNavLinkClass} id="admin-nav-dashboard">
+            {/* Admin Desktop Navigation Links (Dashboard, Products, Orders, Profile) */}
+            <nav className="hidden md:flex items-center space-x-7">
+              <NavLink to="/admin/dashboard" className={adminNavLinkClass} id="admin-nav-dashboard">
                 <span className="flex items-center space-x-1.5">
                   <LayoutDashboard className="w-4 h-4" />
                   <span>Dashboard</span>
@@ -128,10 +161,28 @@ export default function Navbar() {
                   <span>Orders</span>
                 </span>
               </NavLink>
+              <NavLink to="/profile" className={adminNavLinkClass} id="admin-nav-profile-link">
+                <span className="flex items-center space-x-1.5">
+                  <User className="w-4 h-4" />
+                  <span>Profile</span>
+                </span>
+              </NavLink>
             </nav>
 
             {/* Admin Desktop Actions */}
             <div className="hidden md:flex items-center space-x-3">
+              {/* Secondary Storefront inspection link */}
+              <Link
+                to="/"
+                className="inline-flex items-center space-x-1 px-2.5 py-1.5 text-xs font-semibold text-gray-600 hover:text-purple-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
+                title="View Customer Storefront"
+                id="admin-nav-storefront"
+              >
+                <span>View Storefront</span>
+                <ExternalLink className="w-3 h-3 text-gray-400" />
+              </Link>
+
+              {/* Profile badge */}
               <Link
                 to="/profile"
                 className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition-colors"
@@ -142,14 +193,16 @@ export default function Navbar() {
                 <span className="max-w-[120px] truncate">{user?.name || 'Admin'}</span>
               </Link>
 
+              {/* Logout button */}
               <button
                 type="button"
                 onClick={handleLogout}
-                className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors focus:outline-none"
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors focus:outline-none"
                 title="Sign Out"
                 id="admin-nav-logout"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Logout</span>
               </button>
             </div>
 
@@ -173,8 +226,7 @@ export default function Navbar() {
           <div className="md:hidden border-t border-purple-100 bg-white px-4 pt-3 pb-5 space-y-3 shadow-lg">
             <div className="space-y-1">
               <NavLink
-                to="/admin"
-                end
+                to="/admin/dashboard"
                 onClick={() => setIsOpen(false)}
                 className={({ isActive }) =>
                   `block px-3 py-2 rounded-xl text-base font-semibold transition-colors ${
@@ -184,7 +236,7 @@ export default function Navbar() {
                   }`
                 }
               >
-                Admin Dashboard
+                Dashboard
               </NavLink>
               <NavLink
                 to="/admin/products"
@@ -197,7 +249,7 @@ export default function Navbar() {
                   }`
                 }
               >
-                Product Management
+                Products
               </NavLink>
               <NavLink
                 to="/admin/orders"
@@ -210,7 +262,7 @@ export default function Navbar() {
                   }`
                 }
               >
-                Order Management
+                Orders
               </NavLink>
               <NavLink
                 to="/profile"
@@ -223,8 +275,16 @@ export default function Navbar() {
                   }`
                 }
               >
-                Account Settings
+                Profile
               </NavLink>
+              <Link
+                to="/"
+                onClick={() => setIsOpen(false)}
+                className="flex items-center justify-between px-3 py-2 rounded-xl text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-purple-700 transition-colors"
+              >
+                <span>View Storefront</span>
+                <ExternalLink className="w-4 h-4 text-gray-400" />
+              </Link>
             </div>
 
             <div className="pt-3 border-t border-gray-100">
@@ -237,7 +297,7 @@ export default function Navbar() {
                 className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 text-sm font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors"
               >
                 <LogOut className="w-4 h-4" />
-                <span>Sign Out</span>
+                <span>Logout</span>
               </button>
             </div>
           </div>
@@ -301,7 +361,7 @@ export default function Navbar() {
               to="/profile"
               id="nav-profile-btn"
               className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
-              title="Account Settings"
+              title="Profile"
             >
               <User className="w-3.5 h-3.5 text-indigo-600" />
               <span className="max-w-[120px] truncate">{user?.name}</span>
@@ -311,11 +371,12 @@ export default function Navbar() {
             <button
               type="button"
               onClick={handleLogout}
-              className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors focus:outline-none"
-              title="Sign Out"
+              className="inline-flex items-center space-x-1 px-2.5 py-1.5 text-xs font-semibold text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors focus:outline-none"
+              title="Logout"
               id="nav-logout-btn"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
             </button>
           </div>
 
@@ -428,7 +489,7 @@ export default function Navbar() {
               }
             >
               <User className="w-4 h-4 text-indigo-600" />
-              <span>Account Settings</span>
+              <span>Profile</span>
             </NavLink>
             <button
               type="button"
@@ -439,7 +500,7 @@ export default function Navbar() {
               className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 text-sm font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors"
             >
               <LogOut className="w-4 h-4" />
-              <span>Sign Out</span>
+              <span>Logout</span>
             </button>
           </div>
         </div>

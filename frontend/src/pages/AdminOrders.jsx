@@ -1,34 +1,25 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { useAuth } from '../context/AuthContext';
 import {
   ShoppingBag,
   Search,
-  Filter,
   Eye,
   CheckCircle2,
   AlertCircle,
   XCircle,
   Clock,
   Truck,
-  RotateCcw,
   RefreshCw,
   Loader2,
-  Calendar,
   User,
   Phone,
   Mail,
   MapPin,
   FileText,
-  CreditCard,
   ShieldCheck,
-  LayoutDashboard,
-  Package,
   X,
   AlertTriangle,
   ArrowRight,
-  ChevronDown,
 } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
@@ -115,8 +106,6 @@ const ALLOWED_TRANSITIONS = {
 };
 
 export default function AdminOrders() {
-  const { user } = useAuth();
-  const location = useLocation();
 
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -131,7 +120,6 @@ export default function AdminOrders() {
 
   // Details Modal
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [detailsLoading, setDetailsLoading] = useState(false);
 
   // Status Update state
   const [statusUpdating, setStatusUpdating] = useState(false);
@@ -353,42 +341,6 @@ export default function AdminOrders() {
             </div>
           </div>
 
-          {/* Admin Subnav Tabs */}
-          <div className="flex items-center space-x-2 mt-6 pt-4 border-t border-indigo-700/50">
-            <Link
-              to="/admin"
-              className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                location.pathname === '/admin'
-                  ? 'bg-white text-indigo-900 shadow-sm'
-                  : 'text-indigo-200 hover:bg-white/10'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Overview</span>
-            </Link>
-            <Link
-              to="/admin/products"
-              className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                location.pathname === '/admin/products'
-                  ? 'bg-white text-indigo-900 shadow-sm'
-                  : 'text-indigo-200 hover:bg-white/10'
-              }`}
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>Products</span>
-            </Link>
-            <Link
-              to="/admin/orders"
-              className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                location.pathname === '/admin/orders'
-                  ? 'bg-white text-indigo-900 shadow-sm'
-                  : 'text-indigo-200 hover:bg-white/10'
-              }`}
-            >
-              <ShoppingBag className="w-3.5 h-3.5" />
-              <span>Orders</span>
-            </Link>
-          </div>
         </div>
       </div>
 
@@ -511,10 +463,6 @@ export default function AdminOrders() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-xs">
                   {orders.map((o) => {
-                    const currentStatus = o.orderStatus?.toLowerCase();
-                    const availableTransitions = ALLOWED_TRANSITIONS[currentStatus] || [];
-                    const isTerminal = availableTransitions.length === 0;
-
                     return (
                       <tr key={o.id} className="hover:bg-gray-50/60 transition-colors">
                         {/* Order ID */}

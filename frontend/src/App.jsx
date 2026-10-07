@@ -95,6 +95,10 @@ export default function App() {
               />
               <Route
                 path="/admin"
+                element={<Navigate to="/admin/dashboard" replace />}
+              />
+              <Route
+                path="/admin/dashboard"
                 element={
                   <AdminRoute>
                     <AdminDashboard />

@@ -27,7 +27,7 @@ export default function Login() {
   useEffect(() => {
     if (isAuthenticated) {
       if (user?.role === 'admin') {
-        navigate('/admin', { replace: true });
+        navigate('/admin/dashboard', { replace: true });
       } else {
         navigate('/', { replace: true });
       }
@@ -57,9 +57,10 @@ export default function Login() {
     setLoading(false);
     if (result.success) {
       if (result.user?.role === 'admin') {
-        navigate('/admin', { replace: true });
+        navigate('/admin/dashboard', { replace: true });
       } else {
-        navigate(from, { replace: true });
+        const dest = from === '/login' || from.startsWith('/admin') ? '/' : from;
+        navigate(dest, { replace: true });
       }
     } else {
       setError(result.error);

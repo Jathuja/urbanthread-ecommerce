@@ -29,7 +29,7 @@ export default function Register() {
   useEffect(() => {
     if (isAuthenticated) {
       if (user?.role === 'admin') {
-        navigate('/admin', { replace: true });
+        navigate('/admin/dashboard', { replace: true });
       } else {
         navigate('/', { replace: true });
       }

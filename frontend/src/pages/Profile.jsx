@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  ShoppingBag,
   ArrowRight,
   Shield,
 } from 'lucide-react';
@@ -296,9 +295,11 @@ export default function Profile() {
           {/* Header */}
           <div className="prf-header">
             <div className="prf-breadcrumb">
-              <Link to="/">Home</Link>
+              <Link to={user?.role === 'admin' ? '/admin/dashboard' : '/'}>
+                {user?.role === 'admin' ? 'Dashboard' : 'Home'}
+              </Link>
               <span>/</span>
-              <span>My Account</span>
+              <span>{user?.role === 'admin' ? 'Admin Profile' : 'My Account'}</span>
             </div>
             <div className="prf-title-row">
               <div className="prf-avatar">
