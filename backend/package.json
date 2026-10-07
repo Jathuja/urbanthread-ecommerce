@@ -8,6 +8,7 @@
     "dev": "node --watch server.js",
     "db:setup": "node src/scripts/setupDatabase.js",
     "seed": "node src/scripts/setupDatabase.js",
+    "seed:admin": "node src/scripts/seedAdmin.js",
     "test:api": "node src/scripts/testEndpoints.js"
   },
   "keywords": [],
