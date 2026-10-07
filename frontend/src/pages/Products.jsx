@@ -333,7 +333,7 @@ export default function Products() {
     <div className="bg-gray-50/40 min-h-screen">
       {/* ── Page Header ── */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+        <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div>
               <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-gray-900">
@@ -395,11 +395,11 @@ export default function Products() {
       </div>
 
       {/* ── Body: Sidebar + Grid ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-8 items-start">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+        <div className="flex gap-8 lg:gap-10 items-start">
 
           {/* ── Desktop Sidebar ── */}
-          <aside className="hidden lg:block w-64 shrink-0">
+          <aside className="hidden lg:block w-72 shrink-0">
             <div className="bg-white rounded-2xl border border-gray-200 p-6 sticky top-24 shadow-sm">
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
@@ -425,7 +425,7 @@ export default function Products() {
           <main className="flex-1 min-w-0">
             {/* Loading Skeletons */}
             {loading && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <ProductSkeleton key={i} />
                 ))}
@@ -447,7 +447,6 @@ export default function Products() {
                 <button
                   onClick={() => {
                     setFilters(DEFAULT_FILTERS);
-                    // Trigger re-fetch by resetting filter state (effect dependency changes)
                     setError(null);
                     setLoading(true);
                   }}
@@ -468,22 +467,25 @@ export default function Products() {
                 <h3 className="text-lg font-bold text-gray-900 mb-1">
                   No products found
                 </h3>
-                <p className="text-sm text-gray-500 max-w-xs mb-6">
-                  Try adjusting your filters or search term to find what you're looking for.
+                <p className="text-sm text-gray-500 max-w-sm mb-6">
+                  {hasActiveFilters
+                    ? "We couldn't find any items matching your selected filters. Try clearing some filters to explore more options."
+                    : 'Our catalog is currently being updated. Please check back shortly.'}
                 </p>
-                <button
-                  onClick={handleClear}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                >
-                  <X className="w-4 h-4" />
-                  Clear Filters
-                </button>
+                {hasActiveFilters && (
+                  <button
+                    onClick={handleClear}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow transition focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                  >
+                    Clear All Filters
+                  </button>
+                )}
               </div>
             )}
 
-            {/* Products Grid */}
+            {/* Product Cards Grid */}
             {!loading && !error && products.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 sm:gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
                 {products.map((product) => (
                   <ProductCard key={product.id} product={product} />
                 ))}

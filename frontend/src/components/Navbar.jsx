@@ -28,13 +28,17 @@ export default function Navbar() {
   };
 
   const navLinkClass = ({ isActive }) =>
-    `text-sm font-semibold transition-colors hover:text-indigo-600 ${
-      isActive ? 'text-indigo-600' : 'text-gray-600'
+    `text-sm font-semibold transition-all py-1 px-1 border-b-2 ${
+      isActive
+        ? 'text-indigo-600 border-indigo-600 font-bold'
+        : 'text-gray-600 border-transparent hover:text-indigo-600 hover:border-gray-200'
     }`;
 
   const adminNavLinkClass = ({ isActive }) =>
-    `text-sm font-semibold transition-colors hover:text-purple-600 ${
-      isActive ? 'text-purple-700 font-bold' : 'text-gray-600'
+    `text-sm font-semibold transition-all py-1 px-1 border-b-2 ${
+      isActive
+        ? 'text-purple-700 border-purple-700 font-bold'
+        : 'text-gray-600 border-transparent hover:text-purple-600 hover:border-gray-200'
     }`;
 
   // ──────────────────────────────────────────
@@ -46,7 +50,7 @@ export default function Navbar() {
 
     return (
       <header className="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             {/* UrbanThread Branding */}
             <Link
@@ -120,7 +124,7 @@ export default function Navbar() {
   if (user?.role === 'admin') {
     return (
       <header className="bg-white/95 backdrop-blur-md border-b border-purple-200 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             {/* Admin Branding -> Leads to /admin/dashboard */}
             <div className="flex items-center space-x-3">
@@ -311,7 +315,7 @@ export default function Navbar() {
   // ──────────────────────────────────────────
   return (
     <header className="bg-white/95 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           {/* Customer Logo / Brand */}
           <Link

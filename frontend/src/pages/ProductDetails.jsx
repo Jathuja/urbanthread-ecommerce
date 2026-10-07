@@ -186,6 +186,18 @@ export default function ProductDetails() {
   const handleAddToCart = () => {
     if (!product || !selectedVariant || isOutOfStock) return;
 
+    // Strictly ensure selectedVariant belongs to product.variants
+    const belongsToProduct = (product.variants || []).some(
+      (v) => Number(v.id) === Number(selectedVariant.id)
+    );
+    if (!belongsToProduct) {
+      setCartFeedback({
+        type: 'error',
+        message: 'Selected variant does not belong to this product.',
+      });
+      return;
+    }
+
     if (feedbackTimerRef.current) {
       clearTimeout(feedbackTimerRef.current);
     }
@@ -223,7 +235,7 @@ export default function ProductDetails() {
   // ===================== LOADING STATE =====================
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+      <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
         {/* Breadcrumb Skeleton */}
         <div className="h-4 bg-gray-200 rounded w-48 mb-8 animate-pulse" />
 
@@ -335,7 +347,7 @@ export default function ProductDetails() {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+    <div className="max-w-7xl 2xl:max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
       {/* 9. BREADCRUMB */}
       <nav aria-label="Breadcrumb" className="mb-6 sm:mb-8">
         <ol className="flex items-center space-x-2 text-sm text-gray-500 flex-wrap">
@@ -364,10 +376,10 @@ export default function ProductDetails() {
         </ol>
       </nav>
 
-      {/* TWO-COLUMN LAYOUT: Desktop 2 cols, Mobile 1 col */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-start">
-        {/* 10. PRODUCT IMAGE SECTION (LEFT) */}
-        <div className="space-y-4">
+      {/* TWO-COLUMN LAYOUT: Balanced 2 cols on Desktop */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
+        {/* 10. PRODUCT IMAGE SECTION (LEFT 6 cols) */}
+        <div className="lg:col-span-6 space-y-4">
           <div className="relative aspect-[4/5] w-full bg-gray-100 rounded-3xl overflow-hidden border border-gray-200/80 shadow-sm group">
             <img
               src={product.image_url}
@@ -415,8 +427,8 @@ export default function ProductDetails() {
           </div>
         </div>
 
-        {/* PRODUCT DETAILS & SELECTION (RIGHT) */}
-        <div className="flex flex-col space-y-6">
+        {/* PRODUCT DETAILS & SELECTION (RIGHT 6 cols) */}
+        <div className="lg:col-span-6 flex flex-col space-y-6">
           {/* Header Info */}
           <div>
             <div className="flex items-center justify-between gap-2 flex-wrap mb-2">

@@ -1,5 +1,7 @@
-import { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001';
 const CART_STORAGE_KEY = 'urbanthread_cart';
 
 export const CartContext = createContext(null);
@@ -281,6 +283,123 @@ export function CartProvider({ children }) {
     })}`;
   };
 
+  /**
+   * Validate all cart items against the backend product and variant catalog.
+   * Cleans out stale products, deleted variants, mismatched variants, and updates stock/price.
+   * Returns: { valid: boolean, hasChanges: boolean, issues: string[] }
+   */
+  const validateAndSyncCart = useCallback(async () => {
+    if (!cart || cart.length === 0) {
+      return { valid: true, hasChanges: false, issues: [] };
+    }
+
+    try {
+      // Group distinct product IDs to fetch from backend
+      const productIds = [...new Set(cart.map((item) => Number(item.productId)).filter(Boolean))];
+      const productMap = {};
+
+      await Promise.all(
+        productIds.map(async (pid) => {
+          try {
+            const res = await axios.get(`${API_BASE_URL}/api/products/${pid}`);
+            if (res.data?.success && res.data.data) {
+              productMap[pid] = res.data.data;
+            } else {
+              productMap[pid] = null;
+            }
+          } catch {
+            productMap[pid] = null;
+          }
+        })
+      );
+
+      const issues = [];
+      const updatedCart = [];
+
+      for (const item of cart) {
+        const prod = productMap[Number(item.productId)];
+
+        // Case 1: Product no longer exists or is inactive
+        if (!prod || prod.is_active === false || prod.is_active === 0) {
+          issues.push(`"${item.productName || 'Item'}" is no longer available.`);
+          continue;
+        }
+
+        // Case 2: Variant does not belong to product or no longer exists
+        const matchedVariant = (prod.variants || []).find(
+          (v) => Number(v.id) === Number(item.variantId)
+        );
+
+        if (!matchedVariant) {
+          issues.push(
+            `"${item.productName || prod.name}" (${item.size || ''} / ${item.colour || ''}) is no longer available.`
+          );
+          continue;
+        }
+
+        // Case 3: Variant is out of stock (stock <= 0)
+        if (matchedVariant.stock <= 0) {
+          issues.push(
+            `"${item.productName || prod.name}" (${matchedVariant.size} / ${matchedVariant.colour}) is currently out of stock.`
+          );
+          continue;
+        }
+
+        // Case 4: Quantity exceeds current available stock
+        let finalQuantity = Number(item.quantity);
+        if (finalQuantity > matchedVariant.stock) {
+          issues.push(
+            `Quantity for "${prod.name}" (${matchedVariant.size} / ${matchedVariant.colour}) was adjusted to available stock (${matchedVariant.stock}).`
+          );
+          finalQuantity = matchedVariant.stock;
+        }
+
+        // Keep item with updated server-verified data
+        updatedCart.push({
+          ...item,
+          productName: prod.name,
+          price: Number(prod.price),
+          image: prod.image_url || item.image,
+          category: prod.category?.name || item.category || '',
+          size: matchedVariant.size,
+          colour: matchedVariant.colour,
+          quantity: finalQuantity,
+          availableStock: matchedVariant.stock,
+        });
+      }
+
+      const hasChanges =
+        updatedCart.length !== cart.length ||
+        updatedCart.some((u, i) => {
+          const original = cart[i];
+          return (
+            !original ||
+            Number(u.variantId) !== Number(original.variantId) ||
+            Number(u.quantity) !== Number(original.quantity) ||
+            Number(u.price) !== Number(original.price)
+          );
+        });
+
+      if (hasChanges) {
+        setCart(updatedCart);
+        try {
+          localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(updatedCart));
+        } catch {
+          // ignore
+        }
+      }
+
+      return {
+        valid: issues.length === 0,
+        hasChanges,
+        issues,
+      };
+    } catch (err) {
+      console.warn('Cart validation error:', err);
+      return { valid: true, hasChanges: false, issues: [] };
+    }
+  }, [cart]);
+
   const contextValue = {
     cart,
     cartCount: cartItemCount,
@@ -290,6 +409,7 @@ export function CartProvider({ children }) {
     removeFromCart,
     updateQuantity,
     clearCart,
+    validateAndSyncCart,
     getCartTotal,
     getCartItemCount,
     getItemQuantity,
