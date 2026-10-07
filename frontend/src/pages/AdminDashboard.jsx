@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import {
   ShieldCheck,
   Package,
+  LayoutDashboard,
   ShoppingBag,
   Users,
   Clock,
@@ -179,32 +181,56 @@ export default function AdminDashboard() {
               </button>
             </div>
           </div>
+
+          {/* Admin Subnav Tabs */}
+          <div className="flex items-center space-x-2 mt-6 pt-4 border-t border-indigo-700/50">
+            <Link
+              to="/admin"
+              className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold bg-white text-indigo-900 shadow-sm"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>Overview</span>
+            </Link>
+            <Link
+              to="/admin/products"
+              className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-200 hover:bg-white/10 transition-colors"
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>Products</span>
+            </Link>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-4">
         {/* Metric Cards Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {/* Card 1: Total Products */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+          <Link
+            to="/admin/products"
+            className="group bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md hover:border-indigo-200 transition-all block"
+          >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider group-hover:text-indigo-600 transition-colors">
                   Total Products
                 </p>
                 <h3 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">
                   {stats.totalProducts ?? 0}
                 </h3>
               </div>
-              <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+              <div className="w-12 h-12 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all">
                 <Package className="w-6 h-6" />
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center text-xs text-gray-500">
-              <TrendingUp className="w-3.5 h-3.5 text-indigo-500 mr-1" />
-              <span>Active catalog items</span>
+            <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+              <span className="flex items-center">
+                <TrendingUp className="w-3.5 h-3.5 text-indigo-500 mr-1" />
+                <span>Manage catalog items</span>
+              </span>
+              <ArrowUpRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
             </div>
-          </div>
+          </Link>
 
           {/* Card 2: Total Orders */}
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">

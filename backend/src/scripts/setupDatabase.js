@@ -231,6 +231,7 @@ async function setupDatabase() {
       description TEXT,
       price DECIMAL(10, 2) NOT NULL,
       image_url VARCHAR(1000),
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT ON UPDATE CASCADE
@@ -304,6 +305,16 @@ async function setupDatabase() {
       ADD INDEX idx_orders_user_id (user_id)
     `);
     console.log("Added 'user_id' column to orders table.");
+  }
+
+  // Ensure is_active column exists if products table was already created
+  const [productCols] = await conn.query("SHOW COLUMNS FROM products LIKE 'is_active'");
+  if (productCols.length === 0) {
+    await conn.query(`
+      ALTER TABLE products
+      ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1 AFTER image_url
+    `);
+    console.log("Added 'is_active' column to products table.");
   }
 
   // 5. order_items

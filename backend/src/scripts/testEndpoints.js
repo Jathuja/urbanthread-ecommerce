@@ -1241,6 +1241,384 @@ async function runTests() {
     }
   });
 
+  // ===================================================
+  // ADMIN PRODUCT MANAGEMENT TESTS (Tests 56 - 73)
+  // ===================================================
+
+  let createdAdminProductId = null;
+  let createdVariantId = null;
+
+  // 56. GET /api/admin/products unauthenticated (401 Unauthorized)
+  await test('GET /api/admin/products unauthenticated (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products`);
+    const data = await res.json();
+
+    if (res.status !== 401 || data.success !== false) {
+      throw new Error(`Expected 401 Unauthorized, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 57. GET /api/admin/products with customer token (403 Forbidden)
+  await test('GET /api/admin/products with customer token (403 Forbidden - RBAC)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products`, {
+      headers: { Authorization: `Bearer ${tokenCustomerA}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 403 || data.success !== false) {
+      throw new Error(`Expected 403 Forbidden for customer, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 58. GET /api/admin/products with admin token (200 OK - lists products with metrics)
+  await test('GET /api/admin/products with admin token (200 OK - lists products with metrics)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success || !Array.isArray(data.data)) {
+      throw new Error(`Expected 200 OK and product array, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (data.data.length === 0) {
+      throw new Error('Expected at least 1 product in admin catalog list');
+    }
+
+    const first = data.data[0];
+    if (first.id === undefined || first.name === undefined || first.price === undefined || first.is_active === undefined) {
+      throw new Error(`Product payload missing required fields: ${JSON.stringify(first)}`);
+    }
+
+    if (typeof first.variant_count !== 'number' || typeof first.total_stock !== 'number') {
+      throw new Error(`Product payload missing variant_count or total_stock: ${JSON.stringify(first)}`);
+    }
+  });
+
+  // 59. GET /api/admin/products/:id with admin token (200 OK)
+  await test('GET /api/admin/products/:id with admin token (200 OK)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products/1`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success || !data.data) {
+      throw new Error(`Expected 200 OK for product 1, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (data.data.id !== 1 || !Array.isArray(data.data.variants)) {
+      throw new Error(`Product 1 missing variants array: ${JSON.stringify(data.data)}`);
+    }
+  });
+
+  // 60. POST /api/admin/products with invalid product data (400 Bad Request)
+  await test('POST /api/admin/products with missing/invalid fields (400 Bad Request)', async () => {
+    // Missing name
+    const res1 = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category_id: 1, price: 2500 }),
+    });
+    if (res1.status !== 400) throw new Error(`Expected 400 for missing name, got ${res1.status}`);
+
+    // Missing category
+    const res2 = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Valid Name', price: 2500 }),
+    });
+    if (res2.status !== 400) throw new Error(`Expected 400 for missing category, got ${res2.status}`);
+
+    // Non-existent category
+    const res3 = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Valid Name', category_id: 99999, price: 2500 }),
+    });
+    if (res3.status !== 400) throw new Error(`Expected 400 for non-existent category, got ${res3.status}`);
+  });
+
+  // 61. POST /api/admin/products with invalid/negative price (400 Bad Request)
+  await test('POST /api/admin/products with invalid price (400 Bad Request)', async () => {
+    // Negative price
+    const res1 = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Invalid Price Item', category_id: 1, price: -500 }),
+    });
+    if (res1.status !== 400) throw new Error(`Expected 400 for negative price, got ${res1.status}`);
+
+    // Zero price
+    const res2 = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Invalid Price Item', category_id: 1, price: 0 }),
+    });
+    if (res2.status !== 400) throw new Error(`Expected 400 for zero price, got ${res2.status}`);
+
+    // Non-numeric price
+    const res3 = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Invalid Price Item', category_id: 1, price: 'free' }),
+    });
+    if (res3.status !== 400) throw new Error(`Expected 400 for non-numeric price, got ${res3.status}`);
+  });
+
+  // 62. POST /api/admin/products with negative variant stock (400 Bad Request)
+  await test('POST /api/admin/products with negative variant stock (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Negative Stock Item',
+        category_id: 1,
+        price: 2500,
+        variants: [{ size: 'M', colour: 'Black', stock: -10 }],
+      }),
+    });
+    if (res.status !== 400) throw new Error(`Expected 400 for negative stock, got ${res.status}`);
+  });
+
+  // 63. POST /api/admin/products with invalid variant data (400 Bad Request)
+  await test('POST /api/admin/products with missing variant size/colour (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Missing Variant Info',
+        category_id: 1,
+        price: 2500,
+        variants: [{ size: '', colour: 'Black', stock: 10 }],
+      }),
+    });
+    if (res.status !== 400) throw new Error(`Expected 400 for empty variant size, got ${res.status}`);
+  });
+
+  // 64. POST /api/admin/products with duplicate variant in array (400 Bad Request)
+  await test('POST /api/admin/products with duplicate variant entries (400 Bad Request)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Duplicate Variant Item',
+        category_id: 1,
+        price: 3200,
+        variants: [
+          { size: 'M', colour: 'Blue', stock: 10 },
+          { size: 'm', colour: 'blue', stock: 15 },
+        ],
+      }),
+    });
+    if (res.status !== 400) throw new Error(`Expected 400 for duplicate variant, got ${res.status}`);
+  });
+
+  // 65. POST /api/admin/products creates valid product with variants (201 Created)
+  await test('POST /api/admin/products creates valid product with variants (201 Created)', async () => {
+    const uniqueTitle = `Urban Linen Blazer ${Date.now()}`;
+    const res = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: uniqueTitle,
+        category_id: 1,
+        price: 9500.0,
+        description: 'Lightweight summer linen blazer in tailored cut.',
+        image_url: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?w=800',
+        is_active: true,
+        variants: [
+          { size: '38R', colour: 'Sand', stock: 12 },
+          { size: '40R', colour: 'Sand', stock: 18 },
+        ],
+      }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 201 || !data.success || !data.data) {
+      throw new Error(`Expected 201 Created, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    createdAdminProductId = data.data.id;
+    if (!createdAdminProductId || data.data.name !== uniqueTitle) {
+      throw new Error(`Product creation payload mismatch: ${JSON.stringify(data.data)}`);
+    }
+
+    if (data.data.variants.length !== 2) {
+      throw new Error(`Expected 2 variants created, got ${data.data.variants.length}`);
+    }
+
+    createdVariantId = data.data.variants[0].id;
+  });
+
+  // 66. PUT /api/admin/products/:id updates product details (200 OK)
+  await test('PUT /api/admin/products/:id updates product fields (200 OK)', async () => {
+    const updatedPrice = 9900.0;
+    const res = await fetch(`${BASE_URL}/admin/products/${createdAdminProductId}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        price: updatedPrice,
+        description: 'Updated description for summer linen blazer.',
+      }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for product update, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (data.data.price !== updatedPrice) {
+      throw new Error(`Expected price ${updatedPrice}, got ${data.data.price}`);
+    }
+  });
+
+  // 67. POST /api/admin/products/:id/variants adds a variant (201 Created)
+  await test('POST /api/admin/products/:id/variants adds a new variant (201 Created)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products/${createdAdminProductId}/variants`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size: '42R', colour: 'Sand', stock: 8 }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 201 || !data.success) {
+      throw new Error(`Expected 201 Created for adding variant, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (data.data.size !== '42R' || data.data.stock !== 8) {
+      throw new Error(`Variant payload mismatch: ${JSON.stringify(data.data)}`);
+    }
+  });
+
+  // 68. POST /api/admin/products/:id/variants duplicate variant (409 Conflict)
+  await test('POST /api/admin/products/:id/variants duplicate variant (409 Conflict)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products/${createdAdminProductId}/variants`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ size: '42R', colour: 'Sand', stock: 5 }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 409 || data.success !== false) {
+      throw new Error(`Expected 409 Conflict for duplicate variant, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 69. PUT /api/admin/products/:id/variants/:variantId updates variant (200 OK)
+  await test('PUT /api/admin/products/:id/variants/:variantId updates variant (200 OK)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products/${createdAdminProductId}/variants/${createdVariantId}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stock: 35 }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for variant update, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (data.data.stock !== 35) {
+      throw new Error(`Expected stock 35, got ${data.data.stock}`);
+    }
+  });
+
+  // 70. DELETE /api/admin/products/:id/variants/:variantId deletes unused variant (200 OK)
+  await test('DELETE /api/admin/products/:id/variants/:variantId deletes unused variant (200 OK)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/products/${createdAdminProductId}/variants/${createdVariantId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for variant deletion, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 71. Customer receives 403 when attempting to mutate products
+  await test('Customer receives 403 for product mutation operations (RBAC)', async () => {
+    // Customer cannot create
+    const res1 = await fetch(`${BASE_URL}/admin/products`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${tokenCustomerA}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Hack Item', category_id: 1, price: 100 }),
+    });
+    if (res1.status !== 403) throw new Error(`Expected 403 for customer POST, got ${res1.status}`);
+
+    // Customer cannot update
+    const res2 = await fetch(`${BASE_URL}/admin/products/1`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenCustomerA}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ price: 1 }),
+    });
+    if (res2.status !== 403) throw new Error(`Expected 403 for customer PUT, got ${res2.status}`);
+
+    // Customer cannot delete
+    const res3 = await fetch(`${BASE_URL}/admin/products/1`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${tokenCustomerA}` },
+    });
+    if (res3.status !== 403) throw new Error(`Expected 403 for customer DELETE, got ${res3.status}`);
+  });
+
+  // 72. Safe deactivation: DELETE /api/admin/products/:id on product with orders safely deactivates (200 OK)
+  await test('Safe deactivation: DELETE /api/admin/products/1 on ordered product deactivates without breaking DB (200 OK)', async () => {
+    // Product 1 has historical orders (e.g. from tests 14, 48)
+    const res = await fetch(`${BASE_URL}/admin/products/1`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for safe deactivation, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (data.data.is_active !== false || !data.data.deactivated) {
+      throw new Error(`Expected deactivated = true and is_active = false, got ${JSON.stringify(data.data)}`);
+    }
+
+    // Verify product is now marked inactive in admin details
+    const getRes = await fetch(`${BASE_URL}/admin/products/1`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const getData = await getRes.json();
+    if (getData.data.is_active !== false) {
+      throw new Error('Product 1 should have is_active = false after deactivation');
+    }
+  });
+
+  // 73. Historical orders preservation and storefront exclusion
+  await test('Historical orders preservation: Orders still display items, storefront excludes deactivated product', async () => {
+    // 1. Customer storefront GET /api/products/1 should return 404 (or not found) because it is inactive
+    const custProductRes = await fetch(`${BASE_URL}/products/1`);
+    if (custProductRes.status !== 404) {
+      throw new Error(`Expected 404 from customer storefront for deactivated product, got ${custProductRes.status}`);
+    }
+
+    // 2. Customer order history GET /api/orders still returns historical orders with original item details
+    const orderRes = await fetch(`${BASE_URL}/orders`);
+    const orderData = await orderRes.json();
+    if (orderRes.status !== 200 || !orderData.success) {
+      throw new Error(`Expected 200 OK for historical orders, got ${orderRes.status}`);
+    }
+
+    // Reactivate product 1 so test environment stays clean for any subsequent operations
+    await fetch(`${BASE_URL}/admin/products/1`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${tokenAdmin}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: true }),
+    });
+
+    // Cleanup: permanently delete created test product
+    if (createdAdminProductId) {
+      await fetch(`${BASE_URL}/admin/products/${createdAdminProductId}?hard=true`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${tokenAdmin}` },
+      });
+    }
+  });
+
   console.log(`\n--- Test Summary: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) {
     process.exit(1);

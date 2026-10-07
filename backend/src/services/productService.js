@@ -71,6 +71,11 @@ async function getProducts(filters = {}) {
     params.push(colour.trim());
   }
 
+  // Only return active products for customer browsing unless requested
+  if (!filters.includeInactive) {
+    whereClauses.push('p.is_active = 1');
+  }
+
   const whereSQL = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
   const sql = `
@@ -82,6 +87,7 @@ async function getProducts(filters = {}) {
       p.description,
       p.price,
       p.image_url,
+      p.is_active,
       p.created_at,
       p.updated_at
     FROM products p
@@ -128,6 +134,7 @@ async function getProducts(filters = {}) {
       description: p.description,
       price: parseFloat(p.price),
       image_url: p.image_url,
+      is_active: Boolean(p.is_active),
       category: {
         id: p.category_id,
         name: p.category_name,
@@ -143,7 +150,8 @@ async function getProducts(filters = {}) {
 /**
  * Fetch single product by ID with category and variants
  */
-async function getProductById(id) {
+async function getProductById(id, includeInactive = false) {
+  const activeCondition = includeInactive ? '' : 'AND p.is_active = 1';
   const sql = `
     SELECT 
       p.id,
@@ -153,11 +161,12 @@ async function getProductById(id) {
       p.description,
       p.price,
       p.image_url,
+      p.is_active,
       p.created_at,
       p.updated_at
     FROM products p
     JOIN categories c ON p.category_id = c.id
-    WHERE p.id = ?
+    WHERE p.id = ? ${activeCondition}
   `;
 
   const [rows] = await db.query(sql, [id]);
@@ -182,6 +191,7 @@ async function getProductById(id) {
     description: p.description,
     price: parseFloat(p.price),
     image_url: p.image_url,
+    is_active: Boolean(p.is_active),
     category: {
       id: p.category_id,
       name: p.category_name,

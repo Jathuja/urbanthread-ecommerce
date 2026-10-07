@@ -43,7 +43,7 @@ async function createOrder(orderData) {
 
       // Fetch product (server-side price)
       const [productRows] = await conn.query(
-        'SELECT id, name, price FROM products WHERE id = ?',
+        'SELECT id, name, price, is_active FROM products WHERE id = ?',
         [productId]
       );
       if (productRows.length === 0) {
@@ -52,6 +52,11 @@ async function createOrder(orderData) {
         throw err;
       }
       const product = productRows[0];
+      if (product.is_active === 0 || product.is_active === false) {
+        const err = new Error(`Product "${product.name}" is no longer active or available.`);
+        err.statusCode = 400;
+        throw err;
+      }
 
       // Fetch variant with FOR UPDATE lock to prevent concurrent overselling
       const [variantRows] = await conn.query(

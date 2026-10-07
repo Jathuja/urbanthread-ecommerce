@@ -13,6 +13,7 @@ import Register from './pages/Register';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminRoute from './components/AdminRoute';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminProducts from './pages/AdminProducts';
 import { CartProvider } from './context/CartContext';
 import { AuthProvider } from './context/AuthContext';
 
@@ -52,6 +53,14 @@ export default function App() {
                 element={
                   <AdminRoute>
                     <AdminDashboard />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/products"
+                element={
+                  <AdminRoute>
+                    <AdminProducts />
                   </AdminRoute>
                 }
               />
