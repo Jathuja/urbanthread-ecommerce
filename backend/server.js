@@ -8,6 +8,7 @@ dotenv.config();
 const categoryRoutes = require('./src/routes/categoryRoutes');
 const productRoutes = require('./src/routes/productRoutes');
 const orderRoutes = require('./src/routes/orderRoutes');
+const authRoutes = require('./src/routes/authRoutes');
 const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
@@ -28,6 +29,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/auth', authRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);

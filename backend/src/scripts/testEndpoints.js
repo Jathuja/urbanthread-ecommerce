@@ -800,6 +800,333 @@ async function runTests() {
     }
   });
 
+  // ===================================================
+  // CUSTOMER AUTHENTICATION TESTS (Tests 39 - 49)
+  // ===================================================
+
+  const uniqueSuffix = Date.now();
+  const testCustomerA = {
+    name: 'Dilshan Silva',
+    email: `dilshan_${uniqueSuffix}@example.com`,
+    password: 'Password123!',
+    phone: '+94 77 111 2233',
+  };
+
+  const testCustomerB = {
+    name: 'Anuki Fernando',
+    email: `anuki_${uniqueSuffix}@example.com`,
+    password: 'SecurePassword456!',
+    phone: '+94 71 444 5566',
+  };
+
+  let tokenCustomerA = null;
+  let tokenCustomerB = null;
+  let customerAId = null;
+  let customerBId = null;
+  let customerAOrderId = null;
+
+  // 39. POST /api/auth/register (201 Created)
+  await test('POST /api/auth/register (201 Created - successful customer registration)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testCustomerA),
+    });
+    const data = await res.json();
+
+    if (res.status !== 201 || !data.success) {
+      throw new Error(`Expected 201 Created, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (!data.data.token || typeof data.data.token !== 'string') {
+      throw new Error('Response did not contain JWT token');
+    }
+
+    const user = data.data.user;
+    if (!user || !user.id || user.email !== testCustomerA.email.toLowerCase() || user.name !== testCustomerA.name) {
+      throw new Error(`User payload mismatch: ${JSON.stringify(user)}`);
+    }
+
+    // Critical Security: Never expose password or password_hash
+    if (user.password !== undefined || user.password_hash !== undefined || user.passwordHash !== undefined) {
+      throw new Error('SECURITY VIOLATION: Password hash exposed in registration response');
+    }
+
+    tokenCustomerA = data.data.token;
+    customerAId = user.id;
+  });
+
+  // 40. POST /api/auth/register with duplicate email (409 Conflict)
+  await test('POST /api/auth/register with duplicate email (409 Conflict)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'Another User',
+        email: testCustomerA.email.toUpperCase(), // Case-insensitive check
+        password: 'SomePassword999',
+      }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 409 || data.success !== false) {
+      throw new Error(`Expected 409 Conflict for duplicate email, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 41. POST /api/auth/register with invalid data (400 Bad Request)
+  await test('POST /api/auth/register with invalid data (400 Bad Request)', async () => {
+    // Empty name
+    const res1 = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: '', email: 'valid@example.com', password: 'password123' }),
+    });
+    if (res1.status !== 400) throw new Error(`Expected 400 for empty name, got ${res1.status}`);
+
+    // Invalid email
+    const res2 = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Valid Name', email: 'not-an-email', password: 'password123' }),
+    });
+    if (res2.status !== 400) throw new Error(`Expected 400 for invalid email, got ${res2.status}`);
+
+    // Short password (< 6 chars)
+    const res3 = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Valid Name', email: 'valid2@example.com', password: '123' }),
+    });
+    if (res3.status !== 400) throw new Error(`Expected 400 for short password, got ${res3.status}`);
+  });
+
+  // 42. POST /api/auth/login (200 OK - successful login)
+  await test('POST /api/auth/login (200 OK - successful customer login)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testCustomerA.email,
+        password: testCustomerA.password,
+      }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (!data.data.token || typeof data.data.token !== 'string') {
+      throw new Error('Response did not contain JWT token');
+    }
+
+    const user = data.data.user;
+    if (user.id !== customerAId || user.email !== testCustomerA.email.toLowerCase()) {
+      throw new Error(`User payload mismatch: ${JSON.stringify(user)}`);
+    }
+
+    if (user.password_hash !== undefined || user.password !== undefined) {
+      throw new Error('SECURITY VIOLATION: Password hash exposed in login response');
+    }
+
+    // Refresh token
+    tokenCustomerA = data.data.token;
+  });
+
+  // 43. POST /api/auth/login with wrong password (401 Unauthorized)
+  await test('POST /api/auth/login with wrong password (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: testCustomerA.email,
+        password: 'DeliberatelyWrongPassword!',
+      }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 401 || data.success !== false) {
+      throw new Error(`Expected 401 Unauthorized for wrong password, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 44. POST /api/auth/login with non-existent email (401 Unauthorized)
+  await test('POST /api/auth/login with non-existent email (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'nobody_exists_12345@example.com',
+        password: 'AnyPassword123',
+      }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 401 || data.success !== false) {
+      throw new Error(`Expected 401 Unauthorized for non-existent email, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 45. GET /api/auth/me with valid token (200 OK)
+  await test('GET /api/auth/me with valid token (200 OK - returns current user)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${tokenCustomerA}`,
+      },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (data.data.user.id !== customerAId || data.data.user.email !== testCustomerA.email.toLowerCase()) {
+      throw new Error(`User payload mismatch: ${JSON.stringify(data.data.user)}`);
+    }
+
+    if (data.data.user.password_hash !== undefined || data.data.user.password !== undefined) {
+      throw new Error('SECURITY VIOLATION: Password hash exposed in /me response');
+    }
+  });
+
+  // 46. GET /api/auth/me with invalid or expired token (401 Unauthorized)
+  await test('GET /api/auth/me with invalid token (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/me`, {
+      headers: {
+        Authorization: 'Bearer invalid.jwt.token.here',
+      },
+    });
+    const data = await res.json();
+
+    if (res.status !== 401 || data.success !== false) {
+      throw new Error(`Expected 401 Unauthorized for invalid token, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 47. GET /api/auth/me with missing token (401 Unauthorized)
+  await test('GET /api/auth/me with missing token (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/auth/me`);
+    const data = await res.json();
+
+    if (res.status !== 401 || data.success !== false) {
+      throw new Error(`Expected 401 Unauthorized for missing token, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 48. Authenticated customer creates order & accesses order history
+  await test('Authenticated customer creates order and sees only their orders in GET /api/orders', async () => {
+    // 1. Customer A creates order while authenticated
+    const orderRes = await fetch(`${BASE_URL}/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tokenCustomerA}`,
+      },
+      body: JSON.stringify({
+        customer: {
+          name: testCustomerA.name,
+          email: testCustomerA.email,
+          phone: testCustomerA.phone,
+          address: '42 Marine Drive',
+          city: 'Colombo',
+        },
+        items: [{ productId: testProductId, variantId: testVariantId, quantity: 1 }],
+        paymentMethod: 'cash_on_delivery',
+      }),
+    });
+    const orderData = await orderRes.json();
+
+    if (orderRes.status !== 201 || !orderData.success) {
+      throw new Error(`Failed to create authenticated order: ${JSON.stringify(orderData)}`);
+    }
+
+    customerAOrderId = orderData.data.orderId;
+    if (orderData.data.userId !== customerAId) {
+      throw new Error(`Expected order userId to be ${customerAId}, got ${orderData.data.userId}`);
+    }
+
+    // 2. Customer A fetches order history with token -> must include customerAOrderId
+    const historyRes = await fetch(`${BASE_URL}/orders`, {
+      headers: {
+        Authorization: `Bearer ${tokenCustomerA}`,
+      },
+    });
+    const historyData = await historyRes.json();
+
+    if (historyRes.status !== 200 || !historyData.success) {
+      throw new Error(`Failed to retrieve customer A order history: ${JSON.stringify(historyData)}`);
+    }
+
+    const orderFound = historyData.data.find((o) => o.id === customerAOrderId);
+    if (!orderFound) {
+      throw new Error(`Customer A order #${customerAOrderId} not found in customer A's order list`);
+    }
+
+    // Verify all orders in Customer A's list belong to Customer A
+    for (const ord of historyData.data) {
+      if (ord.userId !== customerAId && ord.customer.email.toLowerCase() !== testCustomerA.email.toLowerCase()) {
+        throw new Error(`Found order #${ord.id} belonging to another customer in Customer A's list!`);
+      }
+    }
+  });
+
+  // 49. Customer A order isolation: Customer B CANNOT access Customer A's order (403 Forbidden)
+  await test('Customer isolation: Customer B cannot access Customer A order (403 Forbidden)', async () => {
+    // Register Customer B
+    const regB = await fetch(`${BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(testCustomerB),
+    });
+    const regBData = await regB.json();
+    if (regB.status !== 201) throw new Error(`Failed to register Customer B: ${JSON.stringify(regBData)}`);
+    tokenCustomerB = regBData.data.token;
+    customerBId = regBData.data.user.id;
+
+    // 1. Customer B calls GET /api/orders -> customerAOrderId must NOT appear
+    const listBRes = await fetch(`${BASE_URL}/orders`, {
+      headers: { Authorization: `Bearer ${tokenCustomerB}` },
+    });
+    const listBData = await listBRes.json();
+    if (listBData.data.some((o) => o.id === customerAOrderId)) {
+      throw new Error('SECURITY VIOLATION: Customer A order visible in Customer B order list!');
+    }
+
+    // 2. Customer B attempts to access Customer A order by ID in URL -> 403 Forbidden
+    const detailBRes = await fetch(`${BASE_URL}/orders/${customerAOrderId}`, {
+      headers: { Authorization: `Bearer ${tokenCustomerB}` },
+    });
+    const detailBData = await detailBRes.json();
+
+    if (detailBRes.status !== 403 || detailBData.success !== false) {
+      throw new Error(`Expected 403 Forbidden for Customer B accessing Customer A order, got ${detailBRes.status}: ${JSON.stringify(detailBData)}`);
+    }
+
+    // 3. Customer B attempts to access Customer A order PayHere params -> 403 Forbidden
+    const paramsBRes = await fetch(`${BASE_URL}/orders/${customerAOrderId}/payhere-params`, {
+      headers: { Authorization: `Bearer ${tokenCustomerB}` },
+    });
+    if (paramsBRes.status !== 403) {
+      throw new Error(`Expected 403 Forbidden for Customer B accessing Customer A payhere params, got ${paramsBRes.status}`);
+    }
+
+    // 4. Unauthenticated user attempts to access customerAOrderId -> 401 Unauthorized
+    const unauthRes = await fetch(`${BASE_URL}/orders/${customerAOrderId}`);
+    if (unauthRes.status !== 401) {
+      throw new Error(`Expected 401 Unauthorized for unauthenticated access to customer-owned order, got ${unauthRes.status}`);
+    }
+
+    // 5. Customer A CAN access their own order -> 200 OK
+    const detailARes = await fetch(`${BASE_URL}/orders/${customerAOrderId}`, {
+      headers: { Authorization: `Bearer ${tokenCustomerA}` },
+    });
+    const detailAData = await detailARes.json();
+    if (detailARes.status !== 200 || !detailAData.success) {
+      throw new Error(`Customer A should be able to access own order, got ${detailARes.status}: ${JSON.stringify(detailAData)}`);
+    }
+  });
+
   console.log(`\n--- Test Summary: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) {
     process.exit(1);

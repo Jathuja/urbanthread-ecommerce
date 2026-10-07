@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
-import { Menu, X, ShoppingBag, ShoppingCart, User } from 'lucide-react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Menu, X, ShoppingBag, ShoppingCart, User, LogOut } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const { cartCount } = useCart();
+  const { user, isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
 
   const navLinkClass = ({ isActive }) =>
     `text-sm font-medium transition-colors hover:text-indigo-600 ${
@@ -57,15 +65,37 @@ export default function Navbar() {
               </span>
             </Link>
 
-            {/* Login Placeholder */}
-            <button
-              type="button"
-              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 text-sm font-medium text-gray-700 hover:text-indigo-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              title="Sign in (Feature coming soon)"
-            >
-              <User className="w-4 h-4 text-gray-500" />
-              <span>Login</span>
-            </button>
+            {/* Auth Controls */}
+            {isAuthenticated ? (
+              <div className="flex items-center space-x-2">
+                <Link
+                  to="/orders"
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
+                  title="View your orders"
+                >
+                  <User className="w-3.5 h-3.5 text-indigo-600" />
+                  <span className="max-w-[100px] truncate">{user?.name}</span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors focus:outline-none"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Link
+                  to="/login"
+                  className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 text-sm font-semibold text-gray-700 hover:text-indigo-600 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <User className="w-4 h-4 text-gray-500" />
+                  <span>Sign In</span>
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Mobile Right Controls: Cart + Hamburger Toggle */}
@@ -156,16 +186,46 @@ export default function Navbar() {
             </NavLink>
           </div>
 
-          <div className="pt-3 border-t border-gray-100 flex items-center">
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="w-full flex items-center justify-center space-x-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
-              title="Sign in (Feature coming soon)"
-            >
-              <User className="w-4 h-4 text-gray-500" />
-              <span>Login / Account</span>
-            </button>
+          <div className="pt-3 border-t border-gray-100 flex flex-col space-y-2">
+            {isAuthenticated ? (
+              <div className="space-y-2">
+                <div className="px-3 py-2 bg-gray-50 rounded-xl text-xs text-gray-600 flex items-center space-x-2">
+                  <User className="w-4 h-4 text-indigo-600" />
+                  <div className="truncate">
+                    <span className="font-bold text-gray-900 block truncate">{user?.name}</span>
+                    <span className="text-gray-500 block truncate">{user?.email}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 text-sm font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <Link
+                  to="/login"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center justify-center px-4 py-2.5 text-sm font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl transition-colors"
+                >
+                  <span>Sign In</span>
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center justify-center px-4 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-sm"
+                >
+                  <span>Register</span>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}

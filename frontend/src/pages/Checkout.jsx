@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { generateWhatsAppOrderUrl } from '../utils/whatsapp';
 import {
   ShoppingBag,
@@ -79,6 +80,7 @@ const PAYMENT_METHODS = [
 
 export default function Checkout() {
   const { cart, cartCount, cartTotal, clearCart, formatLKR } = useCart();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
 
   // Read URL query params if returning from PayHere checkout redirect
@@ -87,13 +89,27 @@ export default function Checkout() {
 
   // Form State
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    address: '',
-    city: '',
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    address: user?.address || '',
+    city: user?.city || '',
     notes: '',
   });
+
+  // Prefill form if user loads after mount
+  useEffect(() => {
+    if (user) {
+      setFormData((prev) => ({
+        ...prev,
+        name: prev.name || user.name || '',
+        email: prev.email || user.email || '',
+        phone: prev.phone || user.phone || '',
+        address: prev.address || user.address || '',
+        city: prev.city || user.city || '',
+      }));
+    }
+  }, [user]);
 
   const [paymentMethod, setPaymentMethod] = useState('whatsapp');
   const [errors, setErrors] = useState({});

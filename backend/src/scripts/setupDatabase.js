@@ -249,10 +249,28 @@ async function setupDatabase() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
-  // 4. orders
+  // 4. users
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      phone VARCHAR(50),
+      address TEXT,
+      city VARCHAR(100),
+      role ENUM('customer', 'admin') NOT NULL DEFAULT 'customer',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_users_email (email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // 5. orders
   await conn.query(`
     CREATE TABLE IF NOT EXISTS orders (
       id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NULL,
       customer_name VARCHAR(255) NOT NULL,
       customer_email VARCHAR(255) NOT NULL,
       customer_phone VARCHAR(30) NOT NULL,
@@ -267,12 +285,26 @@ async function setupDatabase() {
       order_status ENUM('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled') NOT NULL DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE,
+      INDEX idx_orders_user_id (user_id),
       INDEX idx_orders_customer_email (customer_email),
       INDEX idx_orders_order_status (order_status),
       INDEX idx_orders_payment_status (payment_status),
       INDEX idx_orders_created_at (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  // Ensure user_id column exists if orders table was already created
+  const [orderCols] = await conn.query("SHOW COLUMNS FROM orders LIKE 'user_id'");
+  if (orderCols.length === 0) {
+    await conn.query(`
+      ALTER TABLE orders
+      ADD COLUMN user_id INT NULL AFTER id,
+      ADD CONSTRAINT fk_orders_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL ON UPDATE CASCADE,
+      ADD INDEX idx_orders_user_id (user_id)
+    `);
+    console.log("Added 'user_id' column to orders table.");
+  }
 
   // 5. order_items
   await conn.query(`

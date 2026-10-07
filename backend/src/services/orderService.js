@@ -105,14 +105,16 @@ async function createOrder(orderData) {
     const total       = parseFloat((subtotal + deliveryFee).toFixed(2));
 
     // ---- Step 5: INSERT order ----
+    const orderUserId = orderData.userId !== undefined ? orderData.userId : null;
     const [orderResult] = await conn.query(
       `INSERT INTO orders
-         (customer_name, customer_email, customer_phone,
+         (user_id, customer_name, customer_email, customer_phone,
           shipping_address, shipping_city, notes,
           subtotal, delivery_fee, total,
           payment_method, payment_status, order_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 'pending')`,
       [
+        orderUserId,
         customer.name.trim(),
         customer.email.trim().toLowerCase(),
         customer.phone.trim(),
@@ -177,6 +179,7 @@ async function createOrder(orderData) {
 
     return {
       orderId,
+      userId: orderUserId,
       customer: {
         name: customer.name.trim(),
         email: customer.email.trim().toLowerCase(),
@@ -221,6 +224,7 @@ async function getOrderById(id) {
   const [orderRows] = await db.query(
     `SELECT
        id,
+       user_id,
        customer_name,
        customer_email,
        customer_phone,
@@ -265,6 +269,7 @@ async function getOrderById(id) {
 
   return {
     id:             order.id,
+    userId:         order.user_id,
     customer: {
       name:    order.customer_name,
       email:   order.customer_email,
@@ -295,10 +300,20 @@ async function getOrderById(id) {
   };
 }
 
-async function getAllOrders() {
-  const [orderRows] = await db.query(
-    `SELECT
+/**
+ * Retrieve all orders, newest first, including their items.
+ * If userId or userEmail is provided, filters to orders owned by that customer.
+ * If neither is provided (guest/legacy), returns all orders.
+ *
+ * @param {number|null} userId - Customer User ID
+ * @param {string|null} userEmail - Customer Email
+ * @returns {Array<Object>} List of orders with items
+ */
+async function getAllOrders(userId = null, userEmail = null) {
+  let query = `
+    SELECT
        id,
+       user_id,
        customer_name,
        customer_email,
        customer_phone,
@@ -314,8 +329,17 @@ async function getAllOrders() {
        created_at,
        updated_at
      FROM orders
-     ORDER BY created_at DESC, id DESC`
-  );
+  `;
+  const params = [];
+
+  if (userId) {
+    query += ` WHERE user_id = ? OR (user_id IS NULL AND customer_email = ?)`;
+    params.push(userId, userEmail ? userEmail.trim().toLowerCase() : '');
+  }
+
+  query += ` ORDER BY created_at DESC, id DESC`;
+
+  const [orderRows] = await db.query(query, params);
 
   if (orderRows.length === 0) {
     return [];
@@ -361,6 +385,7 @@ async function getAllOrders() {
 
   return orderRows.map((order) => ({
     id:             order.id,
+    userId:         order.user_id,
     customer: {
       name:    order.customer_name,
       email:   order.customer_email,

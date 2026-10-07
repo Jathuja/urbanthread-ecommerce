@@ -13,11 +13,13 @@ const payhereService = require('../services/payhereService');
 async function createOrder(req, res, next) {
   try {
     const { customer, items, paymentMethod } = req.body;
+    const userId = req.user ? req.user.id : null;
 
     const result = await orderService.createOrder({
       customer,
       items,
       paymentMethod,
+      userId,
     });
 
     // If paymentMethod is payhere, prepare checkout parameters
@@ -52,6 +54,7 @@ async function createOrder(req, res, next) {
 /**
  * GET /api/orders/:id
  * Retrieve an order and its items by ID.
+ * Enforces customer ownership: Customer A cannot view Customer B's order.
  */
 async function getOrderById(req, res, next) {
   try {
@@ -63,6 +66,32 @@ async function getOrderById(req, res, next) {
         success: false,
         message: 'Order not found',
       });
+    }
+
+    // Ownership verification
+    if (req.user) {
+      // Authenticated customer: can only view their own orders
+      const isOwnerById = order.userId !== null && order.userId === req.user.id;
+      const isOwnerByEmail =
+        order.userId === null &&
+        order.customer?.email &&
+        order.customer.email.toLowerCase() === req.user.email.toLowerCase();
+
+      if (!isOwnerById && !isOwnerByEmail) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to view this order',
+        });
+      }
+    } else {
+      // Unauthenticated request:
+      // If the order belongs to a registered customer account, require authentication
+      if (order.userId !== null) {
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required to view this order',
+        });
+      }
     }
 
     res.status(200).json({
@@ -88,6 +117,27 @@ async function getPayHereParams(req, res, next) {
       return res.status(404).json({
         success: false,
         message: `Order #${id} not found`,
+      });
+    }
+
+    // Ownership verification
+    if (req.user) {
+      const isOwnerById = order.userId !== null && order.userId === req.user.id;
+      const isOwnerByEmail =
+        order.userId === null &&
+        order.customer?.email &&
+        order.customer.email.toLowerCase() === req.user.email.toLowerCase();
+
+      if (!isOwnerById && !isOwnerByEmail) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to access payment parameters for this order',
+        });
+      }
+    } else if (order.userId !== null) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required to access this order',
       });
     }
 
@@ -121,11 +171,15 @@ async function handlePayHereNotify(req, res, next) {
 
 /**
  * GET /api/orders
- * Retrieve all orders, newest first.
+ * Retrieve orders, newest first.
+ * If authenticated, only returns the customer's own orders.
  */
 async function getAllOrders(req, res, next) {
   try {
-    const orders = await orderService.getAllOrders();
+    const orders = req.user
+      ? await orderService.getAllOrders(req.user.id, req.user.email)
+      : await orderService.getAllOrders();
+
     res.status(200).json({
       success: true,
       count: orders.length,
