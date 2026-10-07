@@ -14,7 +14,6 @@ import {
   Truck,
   RotateCcw,
   AlertCircle,
-  CheckCircle,
 } from 'lucide-react';
 
 const COLOUR_SWATCHES = {
