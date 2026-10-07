@@ -45,8 +45,15 @@ export default function Login() {
     setLoading(true);
     const result = await login(formData.email.trim(), formData.password);
     setLoading(false);
-    if (result.success) navigate(from, { replace: true });
-    else setError(result.error);
+    if (result.success) {
+      if (result.user?.role === 'admin') {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
+    } else {
+      setError(result.error);
+    }
   };
 
   return (

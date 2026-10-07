@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Menu, X, ShoppingBag, ShoppingCart, User, LogOut } from 'lucide-react';
+import { Menu, X, ShoppingBag, ShoppingCart, User, LogOut, ShieldCheck } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -68,6 +68,22 @@ export default function Navbar() {
             {/* Auth Controls */}
             {isAuthenticated ? (
               <div className="flex items-center space-x-2">
+                {user?.role === 'admin' && (
+                  <NavLink
+                    to="/admin"
+                    className={({ isActive }) =>
+                      `inline-flex items-center space-x-1 px-2.5 py-1.5 text-xs font-bold rounded-lg border transition-colors ${
+                        isActive
+                          ? 'bg-purple-100 text-purple-700 border-purple-300'
+                          : 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100'
+                      }`
+                    }
+                    title="Admin Dashboard"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Admin</span>
+                  </NavLink>
+                )}
                 <Link
                   to="/orders"
                   className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition-colors"
@@ -196,6 +212,22 @@ export default function Navbar() {
                     <span className="text-gray-500 block truncate">{user?.email}</span>
                   </div>
                 </div>
+                {user?.role === 'admin' && (
+                  <NavLink
+                    to="/admin"
+                    onClick={() => setIsOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center space-x-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                        isActive
+                          ? 'bg-purple-100 text-purple-700'
+                          : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
+                      }`
+                    }
+                  >
+                    <ShieldCheck className="w-4 h-4 text-purple-600" />
+                    <span>Admin Dashboard</span>
+                  </NavLink>
+                )}
                 <button
                   type="button"
                   onClick={() => {

@@ -43,7 +43,7 @@ async function authenticate(req, res, next) {
       });
     }
 
-    // Verify user exists in database
+    // Verify user exists in database and fetch current role
     const [rows] = await db.query(
       'SELECT id, name, email, phone, address, city, role, created_at FROM users WHERE id = ?',
       [decoded.id]
@@ -139,7 +139,32 @@ async function optionalAuth(req, res, next) {
   }
 }
 
+/**
+ * Middleware: Require ADMIN role.
+ * Must be used AFTER authenticate middleware.
+ * Returns 403 Forbidden if the authenticated user is not an admin.
+ * Role is verified from the database record (not from JWT payload alone).
+ */
+function requireAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication token required',
+    });
+  }
+
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Admin privileges required.',
+    });
+  }
+
+  next();
+}
+
 module.exports = {
   authenticate,
   optionalAuth,
+  requireAdmin,
 };

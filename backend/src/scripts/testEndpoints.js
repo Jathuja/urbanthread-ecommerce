@@ -1127,6 +1127,120 @@ async function runTests() {
     }
   });
 
+  // ===================================================
+  // ADMIN AUTHENTICATION & RBAC TESTS (Tests 50 - 55)
+  // ===================================================
+
+  let tokenAdmin = null;
+
+  // 50. GET /api/admin/dashboard without token (401 Unauthorized)
+  await test('GET /api/admin/dashboard without token (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/dashboard`);
+    const data = await res.json();
+
+    if (res.status !== 401 || data.success !== false) {
+      throw new Error(`Expected 401 Unauthorized, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 51. GET /api/admin/dashboard with invalid token (401 Unauthorized)
+  await test('GET /api/admin/dashboard with invalid/malformed token (401 Unauthorized)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/dashboard`, {
+      headers: { Authorization: 'Bearer this_is_an_invalid_token_123' },
+    });
+    const data = await res.json();
+
+    if (res.status !== 401 || data.success !== false) {
+      throw new Error(`Expected 401 Unauthorized for invalid token, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 52. GET /api/admin/dashboard with valid customer token (403 Forbidden)
+  await test('GET /api/admin/dashboard with customer token (403 Forbidden - RBAC enforced)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/dashboard`, {
+      headers: { Authorization: `Bearer ${tokenCustomerA}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 403 || data.success !== false) {
+      throw new Error(`Expected 403 Forbidden for customer accessing admin dashboard, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // 53. POST /api/auth/login with admin credentials (200 OK - role: admin)
+  await test('POST /api/auth/login with admin credentials (200 OK - admin role verified)', async () => {
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@urbanthread.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@UrbanThread2026';
+
+    const res = await fetch(`${BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: adminEmail,
+        password: adminPassword,
+      }),
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for admin login, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    if (!data.data.token || typeof data.data.token !== 'string') {
+      throw new Error('Admin login response did not contain JWT token');
+    }
+
+    const user = data.data.user;
+    if (user.role !== 'admin') {
+      throw new Error(`Expected admin role, got: ${user.role}`);
+    }
+
+    // Security check: no password/password_hash exposed
+    if (user.password !== undefined || user.password_hash !== undefined || user.passwordHash !== undefined) {
+      throw new Error('SECURITY VIOLATION: Password hash exposed in admin login response');
+    }
+
+    tokenAdmin = data.data.token;
+  });
+
+  // 54. GET /api/admin/dashboard with valid admin token (200 OK with dashboard stats)
+  await test('GET /api/admin/dashboard with valid admin token (200 OK - returns stats)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/dashboard`, {
+      headers: { Authorization: `Bearer ${tokenAdmin}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 200 || !data.success) {
+      throw new Error(`Expected 200 OK for admin dashboard, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+
+    const { admin, stats } = data.data;
+
+    if (!admin || admin.role !== 'admin') {
+      throw new Error(`Admin metadata missing or invalid: ${JSON.stringify(admin)}`);
+    }
+
+    if (!stats || typeof stats.totalProducts !== 'number' || typeof stats.totalOrders !== 'number') {
+      throw new Error(`Dashboard stats missing or incomplete: ${JSON.stringify(stats)}`);
+    }
+
+    if (!Array.isArray(stats.recentOrders)) {
+      throw new Error('Dashboard stats missing recentOrders array');
+    }
+  });
+
+  // 55. Customer cannot access admin dashboard via customer token B (403 Forbidden)
+  await test('Customer B cannot access admin dashboard (403 Forbidden)', async () => {
+    const res = await fetch(`${BASE_URL}/admin/dashboard`, {
+      headers: { Authorization: `Bearer ${tokenCustomerB}` },
+    });
+    const data = await res.json();
+
+    if (res.status !== 403 || data.success !== false) {
+      throw new Error(`Expected 403 Forbidden for Customer B, got ${res.status}: ${JSON.stringify(data)}`);
+    }
+  });
+
   console.log(`\n--- Test Summary: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) {
     process.exit(1);
